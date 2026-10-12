@@ -1,20 +1,52 @@
 # rolefit
 
-*Who plays this player's role, and who could do it somewhere else?*
+*Who plays this player's role, how does a team play with them, what does a team need from a role, and who could do it?*
 
-Third project in the PitchGraph programme (after pitchgraph v3 and dynamic_shift). Depends on pitchgraph's Parquet lake (StatsBomb Open Data on Drive). No data lives in this repo.
+Third project in the PitchGraph programme (after pitchgraph v3 and dynamic_shift). It depends on pitchgraph's Parquet lake (StatsBomb Open Data on Drive). No data lives in this repo or on a laptop. Derived tables go to Drive (`rolefit/`).
 
-## Role vector (`roles.py`)
+## The problem it is built around
 
-One vector per player-team-season (unit), built only from shares so a high-possession team's player does not look different from touching the ball more: four 12x8 pitch-grid distributions (where they act, receive, send passes, defend) plus 9 style numbers (pass length, forward direction, long-pass share, action composition). Embedding: standardise, give each block equal total weight, PCA to 20 components, cosine similarity.
+Every number we see for a player mixes the player with the system they play in. A full-back's crossing rate is partly their habit and partly their team's left-lane routes. RoleFit makes that **player vs system** split explicit. It measures the split on players seen at more than one team (club and country, transfers), and builds fit on top of it.
 
-## Pre-registered: does the vector identify the player? (written before running)
+## Four layers
 
-Hyperparameters fixed in advance: 20 PCA components, cosine similarity, grid 12x8. The embedding is unsupervised (no labels used).
+1. **Player traits** (`traits.py`, `xpass.py`). There are 43 interpretable traits in 9 families: territory, involvement, progression, creation, retention, passing profile, carrying, finishing and defending.
+   - Each trait is a share, a mean, an over-expected residual, or a rate per 100 possessions **while the player was on the pitch** (own possessions for on-ball traits, opponent possessions for defending). On-pitch possessions come from lineup spells, keyed by period so stoppage time can't overlap.
+   - Pass completion over expected uses a gradient-boosted completion model cross-fitted by competition-season.
+   - Value added uses pitchgraph's `MarkovValue`.
+   - Each trait will also get a **system-adjusted** version (stage 2): the player relative to their team's baseline in the same zones.
+2. **How the team plays with the player** (`influence.py`, stage 3).
+   - Hub role from the team's player chain: flow share, removal bounds, final-third dependency, partners.
+   - On/off style shift: fingerprint distance, lanes and threat with vs without the player. This is exploratory and has low power.
+3. **What the team needs from a role** (`demand.py`, stage 3). A slot is a team-season × position group.
+   - Its demand profile is the minutes-weighted traits of the players who filled the slot.
+   - It also records the slot's share of the system (flow, progression, creation, defending) and the team's style context.
+   - All of these are compared with the league's same-position average.
+4. **Fit** (`fit.py`, stage 4). Components are shown separately, with no fused score unless validated.
+   - **Role translation:** predict how a player would play in a new slot. Per trait, `new = a·old + b·(demand_new − demand_old) + c`, learnt on movers and cross-fitted by player. The coefficients tell you which traits belong to the player and which belong to the system.
+   - **Demand gap:** predicted traits against what the slot asks for, weighted by how much the system leans on each trait.
+   - **"Plays like":** similarity on portability-weighted traits.
+   - **Counterfactual Δ threat:** swap the player into the team's player chain, with no-adaptation and full-adaptation bounds. v3 found this kind of counterfactual weak (r=0.08 vs real absences), so it is shown as a bound, not a forecast.
 
-1. **Split-half re-ID.** Units with >= 900 minutes. Each unit's matches are sorted by date and alternated into halves A and B; vectors are built from each. Query = half A, gallery = all half-B vectors across the lake. Correct = same unit. **Pass bar:** top-5 >= 0.50 AND top-5 >= 2x the position-label baseline's top-5 (guessing a random gallery row with the same position group).
-2. **Cross-team re-ID** (the key test: does the role belong to the player or to the system?). Units with >= 270 minutes. Query = a unit's full-season vector, gallery = all units; correct = the same player with a different team (club <-> country, or transfers); the query itself and the player's same-team seasons are removed from the candidate list. **Pass bar:** top-5 >= 2x the position-label baseline's top-5 AND the 90% Wilson CI lower bound of top-5 is above that baseline.
+## Pre-registered validation (written before any run)
 
-Anything else is reported as a failure, plainly. No changes to features or thresholds after seeing results. Minutes are approximated from lineup position spells (open-ended spells counted as 90).
+| # | Test | Pass bar |
+|---|---|---|
+| V1 | Trait reliability. Each unit's matches are sorted by date and alternated into halves; units have ≥900 minutes. Per trait, Pearson r between halves, both overall and **within position group** (each group's mean removed, so a trait can't pass just by separating centre-backs from strikers). | A trait is **kept** if within-group r ≥ 0.5. The kept list is reported, and later stages use only kept traits. |
+| V2 | Portability. For movers, the correlation of each trait across teams, raw vs system-adjusted. The ceiling is the same player at the same team in another season. | Descriptive. It produces the portability weights. |
+| V3 | Re-identification on the portability-weighted embedding: split-half, and cross-team (club ↔ country, transfers). Baselines are gallery chance and the position label alone. | Split-half top-5 ≥ 0.50. Cross-team top-5 ≥ 2× the position-label baseline, with the 90% Wilson lower bound above it. |
+| V4 | Role translation: error predicting movers' traits at the new team, cross-fitted by player. Baselines are old traits only, slot demand only, and the league position mean. | The full model beats **both** single-source baselines on median standardised error, with the bootstrap-by-player CI of the improvement excluding 0. |
+| V5 | Counterfactual Δ threat vs the observed change in the new team's threat for movers. | Exploratory, reported with a low-power caveat. |
+| V6 | Face validity: "plays like" lists for archetypes (deep playmaker, inverted full-back, target forward). | Reviewed by the user. |
 
-Later (not yet built): contrastive embedding, system similarity from the v3 fingerprint, counterfactual swap of a player into a team's chain, face-validity lists, the Library pages.
+Thresholds are fixed now. Negatives are reported plainly. Approximations are stated up front:
+- Minutes come from lineup spells, with an open-ended spell counted to 90.
+- Possessions in shoot-outs (period 5) are ignored.
+
+## Stages
+
+1. Traits + V1 (`scripts/run_traits.py`, `.github/workflows/traits.yml`). *Built, not yet run.*
+2. Movers, system-adjusted traits, portability, re-ID (V2, V3).
+3. Team side: demand profiles and influence.
+4. Fit: translation model, demand gap, counterfactual (V4, V5).
+5. Export to the Library: player card, slot card, "replace X in team T" search, side-by-side. Pages state the caveats (eras differ, no age or contract data, showcase only) and carry StatsBomb attribution.
