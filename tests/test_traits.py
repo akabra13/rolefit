@@ -1,0 +1,64 @@
+import json
+
+import numpy as np
+import polars as pl
+
+from rolefit.traits import (EVENT_COLS, add_derived, aggregate, on_pitch_possessions, spells,
+                            split_half_reliability)
+
+
+def _ev(**kw):
+    base = {c: None for c in EVENT_COLS}
+    base.update({"match_id": 1, "player_id": 7, "team_id": 1, "possession_team_id": 1, "period": 1,
+                 "minute": 0, "second": 0, "under_pressure": False, "counterpress": False,
+                 "competition_id": 1, "season_id": 1, "f_cross": False, "f_switch": False,
+                 "f_through": False, "f_assist": False, "f_aerial_won": False, "value": None, "xp": None})
+    base.update(kw)
+    return base
+
+
+def _frame(rows):
+    return pl.DataFrame(rows, infer_schema_length=None)
+
+
+def test_spells_and_on_pitch_possessions_respect_halves():
+    lu = pl.DataFrame({"match_id": [1, 1], "team_id": [1, 1], "player_id": [7, 8], "positions": [
+        json.dumps([{"from": "00:00", "to": "60:00", "from_period": 1, "to_period": 2}]),
+        json.dumps([{"from": "60:00", "to": None, "from_period": 2, "to_period": None}])]})
+    sp = spells(lu)
+    assert sp.filter(pl.col("player_id") == 7)["minutes"][0] == 60
+    assert sp.filter(pl.col("player_id") == 8)["minutes"][0] == 30
+    # possessions: 1st half 46' (stoppage), 2nd half 50', 2nd half 70' (opponent)
+    ev = _frame([_ev(possession=1, period=1, minute=46),
+                 _ev(possession=2, period=2, minute=50),
+                 _ev(possession=3, period=2, minute=70, possession_team_id=2)])
+    onp = on_pitch_possessions(ev, sp).sort("player_id")
+    assert onp["own_poss"].to_list() == [2, 0] and onp["opp_poss"].to_list() == [0, 1]
+
+
+def test_rates_are_per_on_pitch_possession_and_shares_ignore_volume():
+    rows = []
+    for i in range(10):     # 10 open passes, 8 completed, 4 progressive (and long)
+        rows.append(_ev(type="Pass", x=50.0, y=40.0,
+                        end_x=95.0 if i < 2 else (85.0 if i < 4 else 55.0), end_y=40.0,
+                        outcome=None if i < 8 else "Incomplete", xp=0.7))
+    ev = add_derived(_frame(rows)).with_columns(unit=pl.lit("u"))
+    onp = pl.DataFrame({"unit": ["u"], "match_id": [1], "own_poss": [20], "opp_poss": [20], "minutes": [90.0]})
+    t = aggregate(ev, onp, ["unit"]).row(0, named=True)
+    assert abs(t["pass_cmp"] - 0.8) < 1e-9
+    assert abs(t["pass_cmp_oe"] - 0.1) < 1e-9
+    assert abs(t["prog_pass_p100"] - 100 * 4 / 20) < 1e-9
+    assert abs(t["long_share"] - 0.4) < 1e-9
+    assert abs(t["pass_fwd"] - 1.0) < 1e-9
+
+
+def test_within_group_reliability_ignores_position_differences():
+    rng = np.random.default_rng(0)
+    rows = []
+    for u in range(200):
+        g = "CB" if u < 100 else "ST"
+        shift = 0.0 if g == "CB" else 10.0      # big between-group gap, no within-group signal
+        for h in (0, 1):
+            rows.append({"unit": f"u{u}", "group": g, "half": h, "avg_x": shift + rng.normal()})
+    rel = split_half_reliability(pl.DataFrame(rows), "unit", "group", traits=("avg_x",))
+    assert rel["avg_x"]["r"] > 0.9 and abs(rel["avg_x"]["r_within"]) < 0.2

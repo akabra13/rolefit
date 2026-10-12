@@ -1,8 +1,8 @@
-name: Role re-ID
+name: Traits
 
-# Pre-registered split-half and cross-team re-identification of role vectors.
-# Same Drive/rclone setup as validate.yml;
-# read-only on the lake.
+# Stage 1: player traits for every player-team-season, plus the
+# pre-registered split-half reliability test (V1). Derived tables go to
+# Drive (gdrive:rolefit/traits); nothing is stored locally.
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
         default: ""
 
 jobs:
-  reid:
+  traits:
     runs-on: ubuntu-latest
     timeout-minutes: 340
     steps:
@@ -43,22 +43,28 @@ jobs:
           root_folder_id = ${GDRIVE_FOLDER_ID}
           EOF
 
-      - name: Pull lake from Drive
+      - name: Pull lake tables from Drive
         run: |
           mkdir -p "$HOME/pitchgraph"
-          rclone copy gdrive:lake "$HOME/pitchgraph/lake" --fast-list -v
+          for t in events matches lineups; do
+            rclone copy gdrive:lake/$t "$HOME/pitchgraph/lake/$t" --fast-list -v
+          done
 
-      - name: Re-ID tests
+      - name: Traits and reliability
         env:
           PITCHGRAPH_DATA: /home/runner/pitchgraph
           KEYS: ${{ inputs.keys }}
         run: |
-          python scripts/run_reid.py ${KEYS:+--keys $KEYS}
+          python scripts/run_traits.py ${KEYS:+--keys $KEYS}
+
+      - name: Push derived tables to Drive
+        if: ${{ inputs.keys == '' }}
+        run: rclone copy out gdrive:rolefit/traits --fast-list -v
 
       - name: Upload results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reid-results
-          path: reid_results.json
+          name: traits-reliability
+          path: out/reliability.json
           if-no-files-found: ignore
