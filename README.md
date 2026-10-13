@@ -39,6 +39,20 @@ Every number we see for a player mixes the player with the system they play in. 
 | V5 | Counterfactual Δ threat vs the observed change in the new team's threat for movers. | Exploratory, reported with a low-power caveat. |
 | V6 | Face validity: "plays like" lists for archetypes (deep playmaker, inverted full-back, target forward). | Reviewed by the user. |
 
+**Stage 2 specifics (fixed 2026-10-13, before any real-data run):**
+- **Goalkeepers excluded.** Outfield traits don't describe them.
+- **System adjustment** (`system.py`): trait = league-position mean + team effect + player.
+  - The league-position mean is the minutes-weighted mean for the same competition-season and position group.
+  - The team effect is a leave-one-out, minutes-weighted mean of the teammates' (all positions) deviations from their own league-position means, shrunk with 10 pseudo-matches of zero effect.
+  - Two versions per trait: `pos` (minus the league-position mean) and `sys` (also minus the team effect). Role-specific demands are deliberately left in; they are stage 3's demand profiles.
+- **Mover pairs:** both units have at least 270 minutes. Pair types are `same_team`, `club_country`, `transfer` and `other_team`; international means the World Cup, Euro, Women's World Cup, Women's Euro, Copa America, AFCON or U20 World Cup.
+- **Portability weights:** for each trait, use whichever of `pos`/`sys` has the higher cross-team r; the weight is max(0, r).
+  - Weights are fitted on one random half of players and applied to the other half, so re-ID queries are never embedded with weights learnt from their own pairs.
+  - In the embedding, traits are z-scored (a missing value counts as the mean) and scaled by √weight.
+- **Similarity:** Euclidean distance on the embedding. Cosine was rejected before any real run: on z-scored traits it throws away magnitude, and synthetic tests showed it failing on low-dimensional profiles.
+- **V3 split-half** uses the stage 1 halves of units with ≥900 minutes. Each half gets the same season-level offsets as its unit.
+- **V3 cross-team primary:** a query's right answers are the player's units at other teams. The query itself and its same-team units are removed from the candidates. The per-pair-type results and the equal-weight, position-relative embedding are descriptive only.
+
 Thresholds are fixed now. Negatives are reported plainly. Approximations are stated up front:
 - Minutes come from lineup spells, with an open-ended spell counted to 90.
 - Possessions in shoot-outs (period 5) are ignored.
@@ -46,7 +60,7 @@ Thresholds are fixed now. Negatives are reported plainly. Approximations are sta
 ## Stages
 
 1. Traits + V1 (`scripts/run_traits.py`, `.github/workflows/traits.yml`). *Built, not yet run.*
-2. Movers, system-adjusted traits, portability, re-ID (V2, V3).
+2. Movers, system-adjusted traits, portability, re-ID (V2, V3) (`scripts/run_portability.py`, `.github/workflows/portability.yml`). It reads stage 1's tables from Drive. *Built and tested end-to-end on a synthetic league with planted player and team effects; not yet run on real data.*
 3. Team side: demand profiles and influence.
 4. Fit: translation model, demand gap, counterfactual (V4, V5).
 5. Export to the Library: player card, slot card, "replace X in team T" search, side-by-side. Pages state the caveats (eras differ, no age or contract data, showcase only) and carry StatsBomb attribution.

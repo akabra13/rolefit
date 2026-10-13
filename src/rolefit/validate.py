@@ -28,36 +28,47 @@ def wilson(k: int, n: int, z: float = 1.645) -> tuple[float, float]:
     return (c - h) / d, (c + h) / d
 
 
+def neg_sq_euclidean(A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    return -(np.sum(A ** 2, 1)[:, None] - 2 * A @ B.T + np.sum(B ** 2, 1)[None, :])
+
+
 def reid(query: np.ndarray, gallery: np.ndarray, correct: list[set], exclude: list[set] | None = None,
-         groups_q=None, groups_g=None, ks=(1, 5)) -> dict:
-    """Rank gallery rows by cosine similarity to each query row.
+         groups_q=None, groups_g=None, ks=(1, 5), metric: str = "cosine") -> dict:
+    """Rank gallery rows by similarity to each query row (cosine, or
+    negative squared Euclidean distance with metric="euclidean").
 
     correct[i]: gallery indices that are right for query i. exclude[i]:
     gallery indices removed from its candidate list. Queries with no
     surviving right answer are skipped.
     """
-    S = cosine(query, gallery)
+    S = neg_sq_euclidean(query, gallery) if metric == "euclidean" else cosine(query, gallery)
+    G = len(gallery)
+    gg = np.asarray(groups_g, dtype=object) if groups_g is not None else None
     hits = {k: 0 for k in ks}
     chance = {k: 0.0 for k in ks}
     pos = {k: 0.0 for k in ks}
     n = 0
     for i in range(len(query)):
         ex = exclude[i] if exclude else set()
-        right = correct[i] - ex
-        if not right:
+        right = np.array(sorted(correct[i] - ex), dtype=int)
+        if len(right) == 0:
             continue
         n += 1
-        cand = np.array([j for j in range(len(gallery)) if j not in ex])
-        order = cand[np.argsort(-S[i, cand])]
-        first = int(np.argmax([j in right for j in order]))
+        cand = np.ones(G, bool)
+        cand[list(ex)] = False
+        wrong = cand.copy()
+        wrong[right] = False
+        # rank of the best-scoring right answer = how many wrong candidates beat it
+        first = int((S[i, wrong] > S[i, right].max()).sum())
+        n_cand = int(cand.sum())
         for k in ks:
             hits[k] += first < k
-            chance[k] += min(1.0, k * len(right) / len(cand))
-        if groups_q is not None:
-            same = [j for j in cand if groups_g[j] == groups_q[i]]
-            right_same = sum(1 for j in right if groups_g[j] == groups_q[i])
+            chance[k] += min(1.0, k * len(right) / n_cand)
+        if gg is not None:
+            m = int((gg[cand] == groups_q[i]).sum())
+            right_same = int((gg[right] == groups_q[i]).sum())
             for k in ks:
-                pos[k] += min(1.0, k * right_same / len(same)) if same else 0.0
+                pos[k] += min(1.0, k * right_same / m) if m else 0.0
     out = {"n": n}
     for k in ks:
         lo, hi = wilson(hits[k], n)
