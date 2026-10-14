@@ -62,7 +62,7 @@ Thresholds are fixed now. Negatives are reported plainly. Approximations are sta
 1. Traits + V1 (`scripts/run_traits.py`, `.github/workflows/traits.yml`). *Run 2026-10-14, see Results.*
 2. Movers, system-adjusted traits, portability, re-ID (V2, V3) (`scripts/run_portability.py`, `.github/workflows/portability.yml`). It reads stage 1's tables from Drive. *Run 2026-10-14, see Results.*
 3. Team side: slot demand profiles (`demand.py`, `scripts/run_demand.py`, `.github/workflows/demand.yml`). Hub-role and on/off influence (`influence.py`) come after, because they need event-level chains.
-4. Fit: translation model, demand gap, counterfactual (V4, V5).
+4. Fit: translation model (V4) and demand gap (`fit.py`, `scripts/run_fit.py`, `.github/workflows/fit.yml`). The chain-swap counterfactual (V5) needs event-level player chains and is deferred; it stays exploratory.
 5. Export to the Library: player card, slot card, "replace X in team T" search, side-by-side. Pages state the caveats (eras differ, no age or contract data, showcase only) and carry StatsBomb attribution.
 
 ## Results (2026-10-14, full lake: 3,960 matches, 2,911 outfield-and-GK units with >= 900 minutes)
@@ -99,3 +99,13 @@ Question: is a slot's demand a property of the **system**, or just of whoever fi
 - The slot's demand barely changes when its main player does. Most persistent: `avg_x` 0.47, `def_height` 0.44, `prog_pass_p100` 0.48, `pass_cmp` 0.43, `pass_cmp_oe` 0.49, `shots_p100` 0.38, `xg_p100` 0.38, `touches_p100` 0.32. Least: `through_p100` 0.00, `pass_share` 0.03, `pressures_p100o` 0.04, `takeon_p100` 0.07.
 - Caveats: "main player changed" means the player with the most minutes changed. Other squad members, the manager and the club's resources often persist, so this shows demand attaches to the **team context**, not that it is a tactical instruction. The sample is dominated by teams with repeated full-minutes seasons (WSL, Barcelona, a few others), and a correlation of about 0.25 is modest: most of a slot's profile is still not predictable from the same slot's previous season.
 - Consequence for stage 4: demand is a usable second input for the role-translation model, alongside the player's own traits.
+
+## Pre-registered: V4 role translation specifics (written 2026-10-14, before running stage 4)
+
+- **Samples:** every player with two units at different teams (club-country, transfer, other-team pairs), both >= 270 minutes, outfield; each pair in both directions (old -> new). Same-team pairs are scored separately as a ceiling, not used for the verdict.
+- **Variables** (all position-relative, i.e. minus the league's same-position mean; the 38 V1-kept traits): `y` = the player's trait in the new unit; `x_old` = their trait in the old unit; `D_new`, `D_old` = what the slot asks for, defined as the minutes-weighted mean of the **other** players in that slot (leave-one-out, so a player's own new numbers cannot leak into the prediction). Slot-mates need >= 270 minutes between them, otherwise the pair is dropped for all models.
+- **Models** (per trait, ridge with intercept, lambda fixed at 1.0 on standardised features): `full` y ~ x_old + D_new + D_old; `player_only` y ~ x_old; `system_only` y ~ D_new; `position` y = 0.
+- **Cross-fitting:** 5 folds, assigned by player, so a player's moves are never in the training data that predicts them.
+- **Metric:** per trait, out-of-fold MSE divided by the variance of `y` (1.0 = no better than the position mean); the headline is the median over traits.
+- **Pass bar:** `full` beats **both** `player_only` and `system_only` on the median standardised error, with the 90% bootstrap-by-player CI of each improvement above 0.
+- **Descriptive:** per-trait errors, how many traits `full` wins, and the standardised coefficients (a = player, b = new slot, c = old slot) which show which traits travel with the player and which come from the system.
