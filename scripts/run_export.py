@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import polars as pl  # noqa: E402
-
-from pitchgraph.data.lake import Lake  # noqa: E402
 
 from rolefit.export import build_payload  # noqa: E402
 
@@ -20,7 +19,8 @@ if __name__ == "__main__":
     units = pl.read_parquet(OUT / "traits.parquet")
     adj = pl.read_parquet(OUT / "traits_adjusted.parquet")
     weights = json.loads((OUT / "portability.json").read_text(encoding="utf-8"))["weights"]
-    m = Lake.open().matches()
+    root = Path(os.environ.get("PITCHGRAPH_DATA", ".")) / "lake" / "matches"
+    m = pl.read_parquet(str(root / "*.parquet"))
     names = {}
     for a, b in (("home_team_id", "home_team"), ("away_team_id", "away_team")):
         names.update(dict(zip(m[a].to_list(), m[b].to_list())))
