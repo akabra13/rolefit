@@ -128,3 +128,13 @@ Question: is a slot's demand a property of the **system**, or just of whoever fi
   - The "position mean" baseline scores above 1.0 on several traits because movers are not typical (their `y` is shifted from the position mean), so its comparison is easy to beat and not a strong baseline.
   - `avg_y` has a large negative coefficient on the new slot because a position group mixes left and right sides, and a slot's other players sit on the opposite side. It is a grouping artefact, not a real effect.
   - Movers are a selected sample (players good enough to be at two teams with 270+ minutes). Prediction error for typical players could be larger.
+
+### Result: V6 "plays like" lists (2026-10-14) — mixed, for the user to judge
+
+`scripts/run_similar.py` lists each query player's 8 nearest players (Euclidean distance on the V3 portability-weighted embedding, one row per player, units >= 900 minutes). Full lists are in the run output and `similar.json` on Drive.
+
+- **Convincing:** Busquets -> Verratti, Keira Walsh, Zadrazil, Stambouli (all defensive midfielders); Messi -> Neymar, Di Maria, Ibrahimovic, Miedema; Neymar -> Messi, Dembele, Mbappe, Iniesta; Kroos -> Modric, Xavi, Walsh; Luis Suarez -> Benzema, Eto'o, Kane, Sturridge, Lacazette; Putellas -> Bonmati; Jordi Alba -> full-backs (Kolarov, Grimaldo, Clichy) and women's full-backs; Van Dijk -> Pique and other centre-backs; Modric -> Rakitic, Xavi, Badelj.
+- **Weak:** Kante's neighbours are mostly women's centre-backs and defensive midfielders, with no obvious box-to-box type; Vardy -> Thierry Henry, Dzemaili and women's strikers; Ronaldo -> Villa, Henry and women's wingers and strikers; Dani Alves -> Mascherano, Ramsey, Wirtz (a poor match for an attacking right-back); Sergio Ramos' list is plausible but unfocused.
+- **Descriptive check:** 72 of 136 neighbours (53%) are in the query's position group. Roles overlap in practice (a Kroos-style DM sits near CMs), but a role vector that returned the wrong group half the time would not be useful.
+- **Known limitation:** men's and women's players mix freely. Traits are position-relative within each competition, so level differences between leagues are removed by design; that makes cross-gender "plays like" lists possible but unfiltered. The Library should add filters (gender, league, season, position group).
+- **Not yet done:** Lahm has no 900+ minute unit in this lake. The list has not been compared with a baseline (position label, raw traits), so face validity is the only claim.
