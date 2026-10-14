@@ -18,6 +18,10 @@ from rolefit.portability import embed
 from rolefit.traits import TRAITS
 
 MIN_MINUTES = 900.0
+# side and handedness say which flank/foot, not how a player plays; dead-ball taker traits say who the
+# set-piece taker is. Both are kept out of the similarity space, and takers also out of archetypes.
+NOT_STYLE = ("avg_y", "left_foot_share")
+NOT_ARCHETYPE = NOT_STYLE + ("corner_p100", "fk_pass_p100", "throwin_p100", "fk_shot_p100", "cards_p100o")
 
 
 def r(v, nd=2):
@@ -79,9 +83,13 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
                                    "position"), on="unit", how="left"))
     w = merge_weights(weights)
     frame = add_absolute(frame, list(w))
-    E = embed(frame, {t: ("abs", wt) for t, (_, wt) in w.items()})
-    Z = frame.select([f"{t}__abs" for t in kept]).to_numpy().astype(float)
-    assign, arch_info = archetypes(E, frame["group"].fill_null("OTHER").to_list(), Z, kept)
+    style_w = {t: ("abs", wt) for t, (_, wt) in w.items() if t not in NOT_STYLE}
+    E = embed(frame, style_w)
+    arch_w = {t: v for t, v in style_w.items() if t not in NOT_ARCHETYPE}
+    Ea = embed(frame, arch_w)
+    arch_traits = [t for t in arch_w if arch_w[t][1] > 0]
+    Z = frame.select([f"{t}__abs" for t in arch_traits]).to_numpy().astype(float)
+    assign, arch_info = archetypes(Ea, frame["group"].fill_null("OTHER").to_list(), Z, arch_traits)
     tr = translation_coefficients(adj, loo, units.filter(pl.col("group").fill_null("OTHER") != "GK"), kept)
 
     X = frame.select([f"{t}__pos" for t in kept]).to_numpy().astype(float)
