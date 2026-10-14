@@ -48,6 +48,21 @@ if __name__ == "__main__":
         c = ctx[m]
         print(f"  {m:15s} error {c['median_std_error']:.3f}  improvement over full {c['improvement_over_full']:+.4f} "
               f"(90% CI {c['ci90'][0]:+.4f} to {c['ci90'][1]:+.4f})")
+    # sign of the squad-supply effect: positive = a mover drifts toward what teammates already do (assimilates),
+    # negative = does less of what the squad already supplies (division of labour / complements)
+    from rolefit.fit import _ridge
+    coefs = []
+    for t in range(len(kept)):
+        F = np.column_stack([S["x_old"][:, t], S["d_new"][:, t], S["d_old"][:, t], S["O_new"][:, t]])
+        c, _, _, _ = _ridge(F, S["y"][:, t])
+        sd = F.std(0)
+        coefs.append(float(c[3] * sd[3] / (S["y"][:, t].std() or 1.0)))
+    coefs = np.array(coefs)
+    print(f"  squad-supply coefficient (standardised): median {np.median(coefs):+.3f}, "
+          f"positive for {int((coefs > 0).sum())} of {len(coefs)} traits, below -0.1 for {int((coefs < -0.1).sum())}, "
+          f"above +0.1 for {int((coefs > 0.1).sum())}")
+    for lab, order in (("most assimilating", np.argsort(-coefs)[:6]), ("most complementing", np.argsort(coefs)[:6])):
+        print(f"  {lab}: " + ", ".join(f"{kept[i]} ({coefs[i]:+.2f})" for i in order))
     helps = ctx["full_ctx"]["ci90"][0] > 0
     per = {m: standardised_error(err[m], S["y"]) for m in err}
     gains = per["full"] - per["full_ctx"]
@@ -56,5 +71,5 @@ if __name__ == "__main__":
     print("  traits hurt most by context:   " + ", ".join(f"{kept[i]} ({gains[i]:+.3f})" for i in order[::-1][:5]))
     print(f"V4b {'PASS' if helps else 'FAIL'}: full_ctx beats full with the 90% CI of the improvement above 0")
     (OUT / "fit_context.json").write_text(json.dumps(
-        {"n_pairs": n, "n_players": players, "base": base, "context": ctx, "v4b_pass": bool(helps)}, indent=1),
+        {"n_pairs": n, "n_players": players, "base": base, "context": ctx, "v4b_pass": bool(helps), "squad_supply_coef": dict(zip(kept, coefs.round(3).tolist()))}, indent=1),
         encoding="utf-8")
