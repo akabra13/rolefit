@@ -1,0 +1,62 @@
+name: Library export
+
+# Library payload (library.json) from stage 1 and 2 tables on Drive.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install rolefit (and pitchgraph, its pinned dependency)
+        run: pip install -e .
+
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        env:
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [gdrive]
+          type = drive
+          scope = drive
+          token = ${GDRIVE_OAUTH_TOKEN}
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+
+      - name: Pull stage 1 and 2 tables from Drive
+        run: |
+          rclone copy gdrive:rolefit/traits out --fast-list -v
+          rclone copy gdrive:rolefit/portability out --fast-list -v
+
+      - name: Library payload
+        env:
+          PITCHGRAPH_DATA: /home/runner/pitchgraph
+        run: |
+          mkdir -p "$HOME/pitchgraph"
+          rclone copy gdrive:lake/matches "$HOME/pitchgraph/lake/matches" --fast-list -v
+          python scripts/run_export.py
+
+      - name: Push results to Drive
+        run: rclone copy out gdrive:rolefit/library --include "library.json" -v
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: library
+          path: |
+            out/library.json
+          if-no-files-found: ignore
