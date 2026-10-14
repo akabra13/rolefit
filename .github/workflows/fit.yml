@@ -42,10 +42,14 @@ jobs:
           rclone copy gdrive:rolefit/portability out --fast-list -v
 
       - name: Role translation
-        run: python scripts/run_fit.py
+        run: |
+          for g in male female; do
+            echo "=== $g ==="
+            ROLEFIT_OUT=out/$g python scripts/run_fit.py
+          done
 
       - name: Push results to Drive
-        run: rclone copy out gdrive:rolefit/fit --include "fit.json" -v
+        run: rclone copy out gdrive:rolefit/fit --include "**/fit.json" -v
 
       - name: Upload results
         if: always()
@@ -53,5 +57,5 @@ jobs:
         with:
           name: role-translation
           path: |
-            out/fit.json
+            out/*/fit.json
           if-no-files-found: ignore

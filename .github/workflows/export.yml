@@ -47,10 +47,12 @@ jobs:
         run: |
           mkdir -p "$HOME/pitchgraph"
           rclone copy gdrive:lake/matches "$HOME/pitchgraph/lake/matches" --fast-list -v
-          python scripts/run_export.py
+          for g in male female; do
+            ROLEFIT_OUT=out/$g python scripts/run_export.py
+          done
 
       - name: Push results to Drive
-        run: rclone copy out gdrive:rolefit/library --include "library.json" -v
+        run: rclone copy out gdrive:rolefit/library --include "**/library.json" -v
 
       - name: Upload results
         if: always()
@@ -58,5 +60,5 @@ jobs:
         with:
           name: library
           path: |
-            out/library.json
+            out/*/library.json
           if-no-files-found: ignore

@@ -41,10 +41,14 @@ jobs:
         run: rclone copy gdrive:rolefit/traits out --fast-list -v
 
       - name: Portability and re-ID
-        run: python scripts/run_portability.py
+        run: |
+          for g in male female; do
+            echo "=== $g ==="
+            ROLEFIT_OUT=out/$g python scripts/run_portability.py
+          done
 
       - name: Push results to Drive
-        run: rclone copy out gdrive:rolefit/portability --include "portability.json" --include "reid.json" --include "traits_adjusted.parquet" -v
+        run: rclone copy out gdrive:rolefit/portability --include "**/portability.json" --include "**/reid.json" --include "**/traits_adjusted.parquet" -v
 
       - name: Upload results
         if: always()
@@ -52,6 +56,6 @@ jobs:
         with:
           name: portability-reid
           path: |
-            out/portability.json
-            out/reid.json
+            out/*/portability.json
+            out/*/reid.json
           if-no-files-found: ignore

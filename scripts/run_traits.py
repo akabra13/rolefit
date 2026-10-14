@@ -108,18 +108,26 @@ if __name__ == "__main__":
     full.write_parquet(OUT / "traits.parquet")
     halves.write_parquet(OUT / "traits_halves.parquet")
 
-    eligible = full.filter(pl.col("minutes") >= MIN_MINUTES)["unit"]
-    rel = split_half_reliability(halves.filter(pl.col("unit").is_in(eligible.to_list())), "unit", "group")
-    print(f"\n== V1 split-half reliability ({eligible.len()} units with >= {MIN_MINUTES:.0f} min) ==")
-    print(f"   keep if within-position-group r >= {KEEP_R}")
-    kept = []
-    for t, fam in TRAITS.items():
-        x = rel[t]
-        keep = x["r_within"] is not None and x["r_within"] >= KEEP_R
-        kept += [t] if keep else []
-        print(f"  {fam:12s} {t:22s} n={x['n']:5d} r={x['r']}  r_within={x['r_within']}" + ("  KEEP" if keep else ""))
-    print(f"\nkept {len(kept)}/{len(TRAITS)} traits")
-    (OUT / "reliability.json").write_text(json.dumps(
-        {"min_minutes": MIN_MINUTES, "keep_r": KEEP_R, "n_units": eligible.len(),
-         "traits": rel, "kept": kept}, indent=1), encoding="utf-8")
+    genders = [g for g in sorted(full["gender"].drop_nulls().unique().to_list())]
+    for g in genders:
+        d = OUT / g
+        d.mkdir(exist_ok=True)
+        fg = full.filter(pl.col("gender") == g)
+        hg = halves.join(fg.select("unit"), on="unit", how="inner")
+        fg.write_parquet(d / "traits.parquet")
+        hg.write_parquet(d / "traits_halves.parquet")
+        eligible = fg.filter(pl.col("minutes") >= MIN_MINUTES)["unit"]
+        rel = split_half_reliability(hg.filter(pl.col("unit").is_in(eligible.to_list())), "unit", "group")
+        print(f"\n== V1 split-half reliability, {g} ({eligible.len()} units with >= {MIN_MINUTES:.0f} min) ==")
+        print(f"   keep if within-position-group r >= {KEEP_R}")
+        kept = []
+        for t, fam in TRAITS.items():
+            x = rel[t]
+            keep = x["r_within"] is not None and x["r_within"] >= KEEP_R
+            kept += [t] if keep else []
+            print(f"  {fam:12s} {t:24s} n={x['n']:5d} r={x['r']}  r_within={x['r_within']}" + ("  KEEP" if keep else ""))
+        print(f"\n[{g}] kept {len(kept)}/{len(TRAITS)} traits")
+        (d / "reliability.json").write_text(json.dumps(
+            {"gender": g, "min_minutes": MIN_MINUTES, "keep_r": KEEP_R, "n_units": eligible.len(),
+             "traits": rel, "kept": kept}, indent=1), encoding="utf-8")
     print(f"done in {time.time() - t0:.0f}s")

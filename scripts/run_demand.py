@@ -8,6 +8,7 @@ Writes out/slot_demand.parquet and out/demand.json.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -19,7 +20,7 @@ import polars as pl  # noqa: E402
 
 from rolefit.demand import persistence, relative_demand, slot_card, slot_table  # noqa: E402
 
-OUT = Path("out")
+OUT = Path(os.environ.get("ROLEFIT_OUT", "out"))
 MIN_SLOT_MINUTES = 900.0
 MEDIAN_R_BAR = 0.20
 

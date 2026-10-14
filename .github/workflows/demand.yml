@@ -40,10 +40,14 @@ jobs:
         run: rclone copy gdrive:rolefit/traits out --fast-list -v
 
       - name: Slot demand
-        run: python scripts/run_demand.py
+        run: |
+          for g in male female; do
+            echo "=== $g ==="
+            ROLEFIT_OUT=out/$g python scripts/run_demand.py
+          done
 
       - name: Push results to Drive
-        run: rclone copy out gdrive:rolefit/demand --include "demand.json" --include "slot_demand.parquet" -v
+        run: rclone copy out gdrive:rolefit/demand --include "**/demand.json" --include "**/slot_demand.parquet" -v
 
       - name: Upload results
         if: always()
@@ -51,5 +55,5 @@ jobs:
         with:
           name: slot-demand
           path: |
-            out/demand.json
+            out/*/demand.json
           if-no-files-found: ignore

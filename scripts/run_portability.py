@@ -9,6 +9,7 @@ out/portability.json, out/reid.json, out/traits_adjusted.parquet.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -24,7 +25,7 @@ from rolefit.portability import (choose_weights, embed, merge_reid, player_folds
 from rolefit.system import apply_offsets, system_adjust  # noqa: E402
 from rolefit.validate import reid  # noqa: E402
 
-OUT = Path("out")
+OUT = Path(os.environ.get("ROLEFIT_OUT", "out"))
 MIN_MIN_SPLIT = 900.0
 MIN_MIN_CROSS = 270.0
 METRIC = "euclidean"   # z-scored traits: magnitude matters, cosine would discard it

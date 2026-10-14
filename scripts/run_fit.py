@@ -8,6 +8,7 @@ out/reliability.json (stage 1). Writes out/fit.json.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -21,7 +22,7 @@ from rolefit.fit import (build_samples, crossfit, fit_coefficients, loo_slot_dem
                          player_bootstrap, standardised_error)
 from rolefit.movers import CROSS_TEAM, mover_pairs  # noqa: E402
 
-OUT = Path("out")
+OUT = Path(os.environ.get("ROLEFIT_OUT", "out"))
 MIN_MINUTES = 270.0
 
 

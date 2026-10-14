@@ -6,6 +6,7 @@ Writes out/similar.json.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -15,7 +16,7 @@ import polars as pl  # noqa: E402
 
 from rolefit.similar import build_space, find_units, plays_like  # noqa: E402
 
-OUT = Path("out")
+OUT = Path(os.environ.get("ROLEFIT_OUT", "out"))
 QUERIES = ["Sergio Busquets", "Lionel Messi", "Kevin De Bruyne", "Kanté", "Jamie Vardy", "Virgil van Dijk",
            "Jordi Alba", "Philipp Lahm", "Alexia Putellas", "Lauren Hemp", "Cristiano Ronaldo", "Gerard Piqu",
            "Luka Modri", "Toni Kroos", "Neymar", "Sergio Ramos", "Dani Alves", "Luis Suárez"]

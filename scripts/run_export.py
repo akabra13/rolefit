@@ -12,7 +12,7 @@ import polars as pl  # noqa: E402
 
 from rolefit.export import build_payload  # noqa: E402
 
-OUT = Path("out")
+OUT = Path(os.environ.get("ROLEFIT_OUT", "out"))
 
 if __name__ == "__main__":
     kept = json.loads((OUT / "reliability.json").read_text(encoding="utf-8"))["kept"]

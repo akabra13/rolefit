@@ -43,12 +43,30 @@ TRAITS = {
     "pressures_p100o": "defending", "regains_p100o": "defending", "tackles_p100o": "defending",
     "aerials_p100": "defending", "aerial_win": "defending", "counterpress_share": "defending",
     "fouls_p100o": "defending",
+    # --- playstyle block (added 2026-10-14 after feedback that characterisation was too thin) ---
+    "recv_def_share": "reception", "recv_att_share": "reception", "recv_wide_share": "reception",
+    "recv_halfspace_share": "reception", "touch_box_p100": "reception",
+    "dst_def_share": "destination", "dst_att_share": "destination", "dst_box_share": "destination",
+    "dst_wide_share": "destination", "dst_halfspace_share": "destination",
+    "pass_sideways_share": "destination", "pass_forward_share": "destination",
+    "cutback_p100": "technique", "header_share": "technique", "left_foot_share": "technique",
+    "backheel_p100": "technique", "up_touch_share": "technique",
+    "carry_att_entry_p100": "carrying", "carry_box_entry_p100": "carrying", "carry_fwd": "carrying",
+    "carry_speed": "carrying",
+    "dribbled_past_p100o": "defending", "def_own_third_share": "defending", "def_att_third_share": "defending",
+    "intercept_p100o": "defending", "recovery_p100o": "defending", "clearance_p100o": "defending",
+    "block_p100o": "defending", "tackle_win_share": "defending", "press_att_share": "defending",
+    "foul_won_p100": "involvement", "corner_p100": "setpiece", "fk_pass_p100": "setpiece", "throwin_p100": "setpiece",
+    "fk_shot_p100": "setpiece", "cards_p100o": "discipline",
+    "poss_touch_share": "sequence", "xgchain_p100": "sequence", "xgbuildup_p100": "sequence",
+    "shot_box_share": "finishing", "header_shot_share": "finishing", "goals_p100": "finishing",
+    "finishing_oe": "finishing",
 }
 
 EVENT_COLS = ["match_id", "match_date", "event_id", "player_id", "team_id", "possession",
               "possession_team_id", "period", "minute", "second", "type", "sub_type", "outcome",
               "x", "y", "end_x", "end_y", "under_pressure", "counterpress", "height", "body_part",
-              "xg", "play_pattern", "position", "competition_id", "season_id"]
+              "xg", "play_pattern", "position", "duration", "competition_id", "season_id"]
 
 
 def _has(flag: str) -> pl.Expr:
@@ -64,7 +82,11 @@ def event_flags(events: pl.LazyFrame) -> pl.LazyFrame:
         f_through=_has('"through_ball": true') | _has('"name": "Through Ball"'),
         f_assist=_has('"shot_assist": true') | _has('"goal_assist": true'),
         f_aerial_won=_has('"aerial_won": true'),
-    ).select(EVENT_COLS + ["f_cross", "f_switch", "f_through", "f_assist", "f_aerial_won"])
+        f_cutback=_has('"cut_back": true'),
+        f_backheel=_has('"backheel": true'),
+        extra_card=_has('"card"') & pl.col("type").is_in(["Foul Committed", "Bad Behaviour"]),
+    ).select(EVENT_COLS + ["f_cross", "f_switch", "f_through", "f_assist", "f_aerial_won", "f_cutback",
+                           "f_backheel", "extra_card"])
 
 
 def _clock_key(period: int | None, mmss: str | None, default: int) -> int:
@@ -145,15 +167,82 @@ def add_derived(ev: pl.DataFrame) -> pl.DataFrame:
         long=open_pass & (plen >= LONG_PASS), back=open_pass & (dx < 0),
         high=open_pass & (pl.col("height") == "High Pass"),
         pressured_pass=open_pass & pl.col("under_pressure"),
-    )
+    ).with_columns(**_playstyle_columns())
 
+
+def _playstyle_columns() -> dict:
+    t = pl.col("type")
+    sub = pl.col("sub_type").fill_null("")
+    x, y = pl.col("x"), pl.col("y")
+    ex, ey = pl.col("end_x"), pl.col("end_y")
+    open_pass = (t == "Pass") & ~sub.is_in(RESTARTS)
+    own = pl.col("team_id") == pl.col("possession_team_id")
+    box = lambda a, b: (a >= 102) & b.is_between(18, 62)  # noqa: E731
+    lane_wide = lambda b: (b < 18) | (b > 62)  # noqa: E731
+    lane_half = lambda b: b.is_between(18, 30, closed="left") | b.is_between(50, 62, closed="right")  # noqa: E731
+    recv = (t == "Ball Receipt*") & pl.col("outcome").is_null()
+    shot = (t == "Shot") & (sub != "Penalty")
+    carry = (t == "Carry") & ex.is_not_null()
+    dx, dy = ex - x, ey - y
+    plen = (dx ** 2 + dy ** 2).sqrt()
+    defn = t.is_in(DEFENSIVE)
+    foot_pass = open_pass & pl.col("body_part").is_in(["Left Foot", "Right Foot"])
+    return dict(
+        recv_def=recv & (x < 40), recv_att=recv & (x >= 80), recv_wide=recv & lane_wide(y),
+        recv_half=recv & lane_half(y), touch_box=pl.col("touch") & box(x, y),
+        dst_def=open_pass & (ex < 40), dst_att=open_pass & (ex >= 80), dst_box=open_pass & box(ex, ey),
+        dst_wide=open_pass & lane_wide(ey), dst_half=open_pass & lane_half(ey),
+        sideways=open_pass & (dy.abs() > dx.abs()), forward=open_pass & (dx > 0.5 * plen) & (plen > 0),
+        cutback=pl.col("f_cutback"), backheel=pl.col("f_backheel"),
+        header=pl.col("touch") & (pl.col("body_part") == "Head"),
+        foot_pass=foot_pass, left_pass=foot_pass & (pl.col("body_part") == "Left Foot"),
+        up_touch=pl.col("touch") & pl.col("under_pressure"),
+        carry_att=carry & (ex >= 80) & (x < 80), carry_box=carry & box(ex, ey) & ~box(x, y),
+        carry_dx=pl.when(carry).then(dx),
+        carry_spd=pl.when(carry & (pl.col("duration") > 0.5)).then(plen / pl.col("duration")),
+        dpast=t == "Dribbled Past",
+        def_own=defn & (x < 40), def_att=defn & (x >= 80),
+        intercept=t == "Interception", recovery=t == "Ball Recovery", clearance=t == "Clearance",
+        blk=t == "Block", press_att=(t == "Pressure") & (x >= 80), foul_won=t == "Foul Won",
+        tackle_won=(t == "Duel") & (sub == "Tackle") & pl.col("outcome").is_in(["Won", "Success In Play", "Success Out"]),
+        shot_box=shot & box(x, y), header_shot=shot & (pl.col("body_part") == "Head"),
+        goal=shot & (pl.col("outcome") == "Goal"),
+        touch_own=pl.col("touch") & own & t.is_in(["Pass", "Carry", "Dribble", "Shot", "Ball Receipt*",
+                                                    "Miscontrol", "Dispossessed"]),
+        poss_xg=pl.when(own).then(pl.when(shot).then(pl.col("xg").fill_null(0.0))).sum().over("match_id", "possession"),
+        corner=(t == "Pass") & (sub == "Corner"), fk_pass=(t == "Pass") & (sub == "Free Kick"),
+        throw=(t == "Pass") & (sub == "Throw-in"), fk_shot=shot & (sub == "Free Kick"),
+        card=pl.col("extra_card"),
+    )
 
 def aggregate(ev: pl.DataFrame, onp: pl.DataFrame, by: list[str]) -> pl.DataFrame:
     """Traits per group `by`. `ev` from add_derived (plus `value`, `xp`
     columns, nullable) carrying the `by` columns; `onp` carries `by` plus
     own_poss, opp_poss, minutes, already summed or per match."""
     s = lambda c: pl.col(c).sum()  # noqa: E731
+    keys = by + ["match_id", "possession"]
+    ev = ev.with_columns(
+        _ft=pl.col("touch_own") & (pl.col("touch_own").cast(pl.Int8).cum_sum().over(keys) == 1),
+        _own_shot=(pl.col("shot") | pl.col("assist")).any().over(keys))
     g = ev.group_by(by).agg(
+        s("recv_def").alias("n_recv_def"), s("recv_att").alias("n_recv_att"), s("recv_wide").alias("n_recv_wide"),
+        s("recv_half").alias("n_recv_half"), s("touch_box").alias("n_tbox"),
+        s("dst_def").alias("n_dst_def"), s("dst_att").alias("n_dst_att"), s("dst_box").alias("n_dst_box"),
+        s("dst_wide").alias("n_dst_wide"), s("dst_half").alias("n_dst_half"),
+        s("sideways").alias("n_side"), s("forward").alias("n_fwd"), s("cutback").alias("n_cutback"),
+        s("backheel").alias("n_backheel"), s("header").alias("n_header"), s("foot_pass").alias("n_foot"),
+        s("left_pass").alias("n_left"), s("up_touch").alias("n_up"),
+        s("carry_att").alias("n_carry_att"), s("carry_box").alias("n_carry_box"),
+        pl.col("carry_dx").mean().alias("carry_fwd"), pl.col("carry_spd").mean().alias("carry_speed"),
+        s("dpast").alias("n_dpast"), s("def_own").alias("n_def_own"), s("def_att").alias("n_def_att"),
+        s("intercept").alias("n_int"), s("recovery").alias("n_rec"), s("clearance").alias("n_clr"),
+        s("blk").alias("n_blk"), s("press_att").alias("n_press_att"), s("foul_won").alias("n_fw"),
+        s("tackle_won").alias("n_tackle_won"), s("shot_box").alias("n_shot_box"),
+        s("header_shot").alias("n_header_shot"), s("goal").alias("n_goal"),
+        s("corner").alias("n_corner"), s("fk_pass").alias("n_fk"), s("throw").alias("n_throw"),
+        s("fk_shot").alias("n_fk_shot"), s("card").alias("n_card"),
+        s("_ft").alias("n_ptouch"), (pl.col("poss_xg") * pl.col("_ft")).sum().alias("xgchain_sum"),
+        (pl.col("poss_xg") * (pl.col("_ft") & ~pl.col("_own_shot"))).sum().alias("xgbuild_sum"),
         s("touch").alias("n_touch"), s("recv").alias("n_recv"), s("is_pass").alias("n_pass"),
         s("open_pass").alias("n_open"), s("ok_open").alias("n_ok_open"),
         pl.col("tx").mean().alias("avg_x"), pl.col("ty").mean().alias("avg_y"),
@@ -211,6 +300,30 @@ def aggregate(ev: pl.DataFrame, onp: pl.DataFrame, by: list[str]) -> pl.DataFram
         aerial_win=pl.when((pl.col("n_al") + pl.col("n_aw")) > 0)
           .then(pl.col("n_aw") / (pl.col("n_al") + pl.col("n_aw"))),
         counterpress_share=share("n_cp", "n_pressure"),
+        recv_def_share=share("n_recv_def", "n_recv"), recv_att_share=share("n_recv_att", "n_recv"),
+        recv_wide_share=share("n_recv_wide", "n_recv"), recv_halfspace_share=share("n_recv_half", "n_recv"),
+        touch_box_p100=per("n_tbox", "own_poss"),
+        dst_def_share=share("n_dst_def", "n_open"), dst_att_share=share("n_dst_att", "n_open"),
+        dst_box_share=share("n_dst_box", "n_open"), dst_wide_share=share("n_dst_wide", "n_open"),
+        dst_halfspace_share=share("n_dst_half", "n_open"), pass_sideways_share=share("n_side", "n_open"),
+        pass_forward_share=share("n_fwd", "n_open"), cutback_p100=per("n_cutback", "own_poss"),
+        header_share=share("n_header", "n_touch"), left_foot_share=share("n_left", "n_foot"),
+        backheel_p100=per("n_backheel", "own_poss"), up_touch_share=share("n_up", "n_touch"),
+        carry_att_entry_p100=per("n_carry_att", "own_poss"), carry_box_entry_p100=per("n_carry_box", "own_poss"),
+        dribbled_past_p100o=per("n_dpast", "opp_poss"),
+        def_own_third_share=share("n_def_own", "n_def"), def_att_third_share=share("n_def_att", "n_def"),
+        intercept_p100o=per("n_int", "opp_poss"), recovery_p100o=per("n_rec", "opp_poss"),
+        clearance_p100o=per("n_clr", "opp_poss"), block_p100o=per("n_blk", "opp_poss"),
+        tackle_win_share=share("n_tackle_won", "n_tackle"), press_att_share=share("n_press_att", "n_pressure"),
+        foul_won_p100=per("n_fw", "own_poss"),
+        poss_touch_share=pl.when(pl.col("own_poss") > 0).then(pl.col("n_ptouch") / pl.col("own_poss")),
+        xgchain_p100=per("xgchain_sum", "own_poss"), xgbuildup_p100=per("xgbuild_sum", "own_poss"),
+        shot_box_share=share("n_shot_box", "n_shot"), header_shot_share=share("n_header_shot", "n_shot"),
+        goals_p100=per("n_goal", "own_poss"),
+        finishing_oe=pl.when(pl.col("n_shot") > 0).then((pl.col("n_goal") - pl.col("xg_sum")) / pl.col("n_shot")),
+        corner_p100=per("n_corner", "own_poss"), fk_pass_p100=per("n_fk", "own_poss"),
+        throwin_p100=per("n_throw", "own_poss"), fk_shot_p100=per("n_fk_shot", "own_poss"),
+        cards_p100o=per("n_card", "opp_poss"),
     )
     return out.select(by + ["minutes", "matches", "own_poss", "opp_poss", "n_touch"] + list(TRAITS))
 

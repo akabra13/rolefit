@@ -12,7 +12,8 @@ def _ev(**kw):
     base.update({"match_id": 1, "player_id": 7, "team_id": 1, "possession_team_id": 1, "period": 1,
                  "minute": 0, "second": 0, "under_pressure": False, "counterpress": False,
                  "competition_id": 1, "season_id": 1, "f_cross": False, "f_switch": False,
-                 "f_through": False, "f_assist": False, "f_aerial_won": False, "value": None, "xp": None})
+                 "f_through": False, "f_assist": False, "f_aerial_won": False, "f_cutback": False,
+                 "f_backheel": False, "extra_card": False, "value": None, "xp": None})
     base.update(kw)
     return base
 
@@ -62,3 +63,30 @@ def test_within_group_reliability_ignores_position_differences():
             rows.append({"unit": f"u{u}", "group": g, "half": h, "avg_x": shift + rng.normal()})
     rel = split_half_reliability(pl.DataFrame(rows), "unit", "group", traits=("avg_x",))
     assert rel["avg_x"]["r"] > 0.9 and abs(rel["avg_x"]["r_within"]) < 0.2
+
+
+def test_playstyle_traits_on_hand_traceable_events():
+    rows = [
+        _ev(type="Ball Receipt*", x=20.0, y=40.0, possession=1),     # own third, central
+        _ev(type="Ball Receipt*", x=90.0, y=5.0, possession=1),      # attacking third, wide
+        _ev(type="Pass", x=90.0, y=5.0, end_x=108.0, end_y=40.0, possession=1, body_part="Left Foot"),  # into box
+        _ev(type="Pass", x=60.0, y=40.0, end_x=60.0, end_y=60.0, possession=2, body_part="Right Foot"),  # sideways
+        _ev(type="Carry", x=70.0, y=40.0, end_x=85.0, end_y=40.0, possession=2, duration=3.0),
+        _ev(type="Pass", x=5.0, y=40.0, end_x=30.0, end_y=40.0, possession=3, sub_type="Corner"),
+        _ev(type="Pressure", x=85.0, y=30.0, possession_team_id=2, team_id=1),
+        _ev(type="Dribbled Past", x=30.0, y=30.0, possession_team_id=2, team_id=1),
+        _ev(type="Shot", x=105.0, y=40.0, possession=1, xg=0.3, outcome="Goal", body_part="Head"),
+    ]
+    ev = add_derived(_frame(rows)).with_columns(unit=pl.lit("u"))
+    onp = pl.DataFrame({"unit": ["u"], "match_id": [1], "own_poss": [10], "opp_poss": [10], "minutes": [90.0]})
+    t = aggregate(ev, onp, ["unit"]).row(0, named=True)
+    assert t["recv_def_share"] == 0.5 and t["recv_att_share"] == 0.5 and t["recv_wide_share"] == 0.5
+    assert abs(t["dst_box_share"] - 1 / 2) < 1e-9 and t["pass_sideways_share"] == 1.0
+    assert t["left_foot_share"] == 0.5
+    assert abs(t["carry_att_entry_p100"] - 10.0) < 1e-9 and abs(t["carry_speed"] - 5.0) < 1e-9
+    assert abs(t["corner_p100"] - 10.0) < 1e-9
+    assert t["press_att_share"] == 1.0 and abs(t["dribbled_past_p100o"] - 10.0) < 1e-9
+    assert t["goals_p100"] == 10.0 and abs(t["finishing_oe"] - 0.7) < 1e-9 and t["header_shot_share"] == 1.0
+    # possessions 1, 2, 3 are touched; only possession 1 produced xG (0.3), and the player took that shot
+    assert abs(t["poss_touch_share"] - 0.3) < 1e-9 and abs(t["xgchain_p100"] - 3.0) < 1e-9
+    assert t["xgbuildup_p100"] == 0.0
