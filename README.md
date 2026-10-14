@@ -109,3 +109,22 @@ Question: is a slot's demand a property of the **system**, or just of whoever fi
 - **Metric:** per trait, out-of-fold MSE divided by the variance of `y` (1.0 = no better than the position mean); the headline is the median over traits.
 - **Pass bar:** `full` beats **both** `player_only` and `system_only` on the median standardised error, with the 90% bootstrap-by-player CI of each improvement above 0.
 - **Descriptive:** per-trait errors, how many traits `full` wins, and the standardised coefficients (a = player, b = new slot, c = old slot) which show which traits travel with the player and which come from the system.
+
+### Result: V4 role translation (2026-10-14) — PASS, with a small margin
+
+2,078 directed cross-team pairs from 465 players (club-country and transfers), 38 traits, folds by player.
+
+| Model | Median standardised error (90% CI) |
+|---|---|
+| full (old traits + new slot + old slot) | **0.849** (0.824-0.868) |
+| player only (old traits) | 0.873 (0.865-0.919) |
+| system only (new slot's demand) | 0.987 (0.959-1.003) |
+| position mean | 1.059 (1.032-1.113) |
+
+- The full model beats player-only by **+0.025** (90% CI +0.016 to +0.079), system-only by +0.138 (+0.112 to +0.161) and the position mean by +0.210. Per trait it beats system-only on 38 of 38 and player-only on 29 of 38. Bar: passes.
+- **Honest size of the effect:** adding the new slot to a player's own history improves prediction by about 3% of the variance. A player's old numbers do most of the work; the new system explains a little more on top. The picture is the same for players who stayed at the same team (full 0.736, player-only 0.749), where the system should add nothing: for those pairs the improvement is +0.013 and its CI includes 0. So the cross-team gain is small but is not just a modelling artefact; it is larger exactly where the system differs.
+- **Where the system matters** (largest b on the new slot, standardised): `touches_p100` and `recv_p100` (+0.50, +0.56), `carry_p100` (+0.50), `pass_cmp` (+0.50), `avg_x` (+0.56), `def_height` (+0.54), `high_share` (+0.43). These are volume, height and accuracy traits, and a player's value moves with the slot. **Where the player dominates** (b about 0): `prog_pass`, `prog_carry`, `shot_assist`, `shots_p100`, `takeon_p100`, `aerials_p100`, `pressures_p100o`, `regains_p100o`, `tackles_p100o`. Style choices (how to progress, who to take on, how to defend) travel; how much and how safely you are used does not.
+- **Caveats:**
+  - The "position mean" baseline scores above 1.0 on several traits because movers are not typical (their `y` is shifted from the position mean), so its comparison is easy to beat and not a strong baseline.
+  - `avg_y` has a large negative coefficient on the new slot because a position group mixes left and right sides, and a slot's other players sit on the opposite side. It is a grouping artefact, not a real effect.
+  - Movers are a selected sample (players good enough to be at two teams with 270+ minutes). Prediction error for typical players could be larger.
