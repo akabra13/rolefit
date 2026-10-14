@@ -59,8 +59,25 @@ Thresholds are fixed now. Negatives are reported plainly. Approximations are sta
 
 ## Stages
 
-1. Traits + V1 (`scripts/run_traits.py`, `.github/workflows/traits.yml`). *Built, not yet run.*
-2. Movers, system-adjusted traits, portability, re-ID (V2, V3) (`scripts/run_portability.py`, `.github/workflows/portability.yml`). It reads stage 1's tables from Drive. *Built and tested end-to-end on a synthetic league with planted player and team effects; not yet run on real data.*
+1. Traits + V1 (`scripts/run_traits.py`, `.github/workflows/traits.yml`). *Run 2026-10-14, see Results.*
+2. Movers, system-adjusted traits, portability, re-ID (V2, V3) (`scripts/run_portability.py`, `.github/workflows/portability.yml`). It reads stage 1's tables from Drive. *Run 2026-10-14, see Results.*
 3. Team side: demand profiles and influence.
 4. Fit: translation model, demand gap, counterfactual (V4, V5).
 5. Export to the Library: player card, slot card, "replace X in team T" search, side-by-side. Pages state the caveats (eras differ, no age or contract data, showcase only) and carry StatsBomb attribution.
+
+## Results (2026-10-14, full lake: 3,960 matches, 2,911 outfield-and-GK units with >= 900 minutes)
+
+**V1 trait reliability.** 38 of 43 traits are kept (within-position split-half r >= 0.5); most are 0.6-0.9. Not kept: `value_per_action` (0.47), `takeon_success` (0.10), `xg_per_shot` (0.28), `aerial_win` (0.42), `counterpress_share` (0.28). Success rates and per-event quality are noisy, while volumes and locations are stable. The completion model (cross-fitted by competition-season) has out-of-fold AUC 0.916.
+
+**V2 portability** (r between a player's two units; 90% CIs in `portability.json`). Pairs: 1,665 same-team, 1,101 club-country, 556 transfer. Typical trait: r about 0.5 with the team held fixed and about 0.35 across teams, so roughly two thirds of the stable signal travels.
+- Most portable across teams: `avg_y` (0.57, the side of the pitch), `takeon_p100` (0.52), `aerials_p100` (0.55), `prog_carry_p100` (0.50), `box_entry_p100` (0.50), `through_p100` (0.49).
+- Least portable: `shot_dist` (0.17), `y_spread` (0.17), `avg_x` (0.17-0.22), `def_height` (0.16-0.23), `pressured_pass_share` (0.19).
+- **The team-effect adjustment does not help in general.** For volume traits it hurts: `touches_p100` 0.48 raw to 0.29 adjusted, `carry_p100` 0.48 to 0.31. It helps for passing direction: `pass_fwd` 0.35 to 0.44 and `back_share` 0.35 to 0.43 across teams. A likely reason is that a team's overall volume partly reflects the role mix its players fill, so removing it also removes part of the player. Weights therefore pick the better version per trait.
+
+**V3 re-identification (both pre-registered bars pass):**
+- **Split-half:** top-5 0.634 (90% CI 0.619-0.649), top-1 0.430, among 2,678 queries; chance 0.002, position label 0.013. Bar: top-5 >= 0.50. Equal-weight position-relative embedding: 0.603.
+- **Cross-team:** top-5 0.070 (0.061-0.080), top-1 0.029, among 1,860 queries in a gallery of 5,536 units; chance 0.002, position label 0.006. That is 11x the position baseline and the CI sits above it, so the bar passes. Club-country 0.055, transfer 0.084. Equal weights: 0.064.
+- **What it means:** within the same team, a player is highly recognisable. Across teams they are recognisable well above chance but rarely at the top. At 7% top-5 the vector is not a "who is this player" identifier across systems; it is a useful but weak signal, consistent with about two thirds portability per trait. Portability weighting added little over equal weights (0.070 vs 0.064).
+- Caveat: the gallery includes thousands of low-minute units (270 minutes or more), which makes cross-team harder than if only established players were listed.
+
+Implication for fit (stages 3-4): roughly a third of a trait's stable variation depends on the system, so translating a player to a new team is a real modelling problem, not an identity map.
