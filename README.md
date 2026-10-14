@@ -91,3 +91,11 @@ Question: is a slot's demand a property of the **system**, or just of whoever fi
 - **Pass bar:** median over traits of r(same team, new main player) >= 0.20 AND greater than the median other-team r + 0.10. Otherwise slot demand is reported as not separable from the occupant.
 - Also reported (descriptive): each slot's share of its team's volume traits (touches, progression, creation, defending), and cards listing a slot's most unusual traits.
 - Limitation stated up front: only seasons with full minutes data pair up, which is mostly the four WSL seasons and Barcelona's La Liga seasons, so the test is low-powered and clubs with repeated seasons are not a random sample.
+
+### Result: V3b slot-demand persistence (2026-10-14) — PASS
+
+1,531 slots (>= 900 slot-minutes) over 210 teams and 48 competition-seasons; 1,214 same-team, same-position pairs across two seasons, of which 926 had a different main player.
+- Median over the 38 traits: same team **0.25**, same team with a new main player **0.24**, random other team **-0.03**. Bar (>= 0.20 and > other-team + 0.10): passes.
+- The slot's demand barely changes when its main player does. Most persistent: `avg_x` 0.47, `def_height` 0.44, `prog_pass_p100` 0.48, `pass_cmp` 0.43, `pass_cmp_oe` 0.49, `shots_p100` 0.38, `xg_p100` 0.38, `touches_p100` 0.32. Least: `through_p100` 0.00, `pass_share` 0.03, `pressures_p100o` 0.04, `takeon_p100` 0.07.
+- Caveats: "main player changed" means the player with the most minutes changed. Other squad members, the manager and the club's resources often persist, so this shows demand attaches to the **team context**, not that it is a tactical instruction. The sample is dominated by teams with repeated full-minutes seasons (WSL, Barcelona, a few others), and a correlation of about 0.25 is modest: most of a slot's profile is still not predictable from the same slot's previous season.
+- Consequence for stage 4: demand is a usable second input for the role-translation model, alongside the player's own traits.
