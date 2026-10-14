@@ -10,6 +10,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
+from rolefit.context import others_demand
 from rolefit.fit import _ridge, build_samples, loo_slot_demand
 from rolefit.movers import CROSS_TEAM, mover_pairs
 from rolefit.names import NAMES
@@ -63,12 +64,22 @@ def archetypes(E: np.ndarray, groups: list, Z: np.ndarray, kept: list, k_range=(
     return assign, info
 
 
-def translation_coefficients(adj, loo, units, kept) -> dict:
+def translation_coefficients(adj, loo, others, units, kept) -> dict:
+    """V4 translation plus the squad-supply term (V4b): features per trait are
+    [x_old, D_new, D_old, O_new]; O_new is what the rest of the new team supplies."""
     pairs = mover_pairs(units, 270.0)
     S = build_samples(adj, loo, pairs, kept, CROSS_TEAM)
+    o = others.select(["unit"] + [f"O_{t}" for t in kept])
+    row = {u: i for i, u in enumerate(o["unit"].to_list())}
+    O = o.select([f"O_{t}" for t in kept]).to_numpy().astype(float)
+    idx = np.array([row.get(u, -1) for u in S["unit_new"]])
+    ok = (idx >= 0)
+    ok[ok] = ~np.isnan(O[idx[ok]]).any(1)
+    S = {k: v[ok] for k, v in S.items()}
+    O_new = O[idx[ok]]
     out = {}
     for t, name in enumerate(kept):
-        F = np.column_stack([S["x_old"][:, t], S["d_new"][:, t], S["d_old"][:, t]])
+        F = np.column_stack([S["x_old"][:, t], S["d_new"][:, t], S["d_old"][:, t], O_new[:, t]])
         coef, b0, _, _ = _ridge(F, S["y"][:, t])
         out[name] = [float(c) for c in coef] + [float(b0)]
     return {"n_pairs": int(len(S["y"])), "n_players": int(len(np.unique(S["player"]))), "coef": out}
@@ -77,8 +88,9 @@ def translation_coefficients(adj, loo, units, kept) -> dict:
 def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: list,
                   team_names: dict, min_minutes: float = MIN_MINUTES) -> dict:
     loo = loo_slot_demand(adj, kept)
+    others = others_demand(adj, kept)
     frame = (adj.filter(pl.col("minutes") >= min_minutes)
-                .join(loo, on="unit")
+                .join(loo, on="unit").join(others, on="unit")
                 .join(units.select("unit", "player", "nickname", "competition", "season", "gender",
                                    "position"), on="unit", how="left"))
     w = merge_weights(weights)
@@ -90,10 +102,11 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
     arch_traits = [t for t in arch_w if arch_w[t][1] > 0]
     Z = frame.select([f"{t}__abs" for t in arch_traits]).to_numpy().astype(float)
     assign, arch_info = archetypes(Ea, frame["group"].fill_null("OTHER").to_list(), Z, arch_traits)
-    tr = translation_coefficients(adj, loo, units.filter(pl.col("group").fill_null("OTHER") != "GK"), kept)
+    tr = translation_coefficients(adj, loo, others, units.filter(pl.col("group").fill_null("OTHER") != "GK"), kept)
 
     X = frame.select([f"{t}__pos" for t in kept]).to_numpy().astype(float)
     D = frame.select([f"D_{t}" for t in kept]).to_numpy().astype(float)
+    O = frame.select([f"O_{t}" for t in kept]).to_numpy().astype(float)
     sd = np.nanstd(X, axis=0)
     players = []
     for i, row in enumerate(frame.select("unit", "player_id", "player", "nickname", "team_id", "competition",
@@ -104,7 +117,7 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
             "t": team_names.get(row["team_id"], str(row["team_id"])), "c": row["competition"],
             "s": row["season"], "g": row["gender"], "p": row["group"], "pos": row["position"], "a": assign[i],
             "m": int(round(row["minutes"])),
-            "x": [r(v) for v in X[i]], "d": [r(v) for v in D[i]], "e": [r(v, 2) for v in E[i]],
+            "x": [r(v) for v in X[i]], "d": [r(v) for v in D[i]], "o": [r(v) for v in O[i]], "e": [r(v, 2) for v in E[i]],
         })
     return {
         "traits": [{"k": t, "family": TRAITS.get(t, "other"), "sd": r(s, 3)} for t, s in zip(kept, sd)],

@@ -151,3 +151,19 @@ Question raised by the user: does the receiving team itself matter beyond its sl
 - **Pass bar:** `full_ctx` beats `full` on the median standardised error, with the 90% bootstrap-by-player CI of the improvement above 0. Run separately for men and women.
 - Descriptive: which traits gain or lose most from context.
 - A "complements the team" score will only be built if V4b passes; otherwise the page shows the squad's coverage as information, not a score.
+
+### Result: V4b team context (2026-10-14), men and women separately
+
+Pairs: 1,072 (230 men) and 1,118 (260 women), cross-team movers with full context.
+
+| Model | Men: improvement over V4 `full` (90% CI) | Women: improvement over V4 `full` (90% CI) |
+|---|---|---|
+| + squad supply `O_t` | **+0.034** (+0.005 to +0.044) | **+0.041** (+0.022 to +0.061) |
+| + formation and style | -0.025 (-0.040 to +0.003) | **+0.036** (+0.009 to +0.053) |
+| + all context (registered bar) | -0.014 (-0.034 to +0.015) **FAIL** | **+0.043** (+0.015 to +0.064) **PASS** |
+
+- **Registered verdict:** the all-context model passes for women and fails for men. For men the formation and style features add 14 inputs per trait to 1,072 pairs and overfit; the formation mix alone is a weak signal. I am not claiming formation matters.
+- **Squad supply helps both genders** (not the registered comparison, so exploratory): knowing what the rest of the new team already does improves the prediction of how a mover will play by about 3-4% of the variance.
+- **The direction of that effect is assimilation, not complementarity.** The squad-supply coefficient is positive for 63 of 70 traits (men) and 61 of 69 (women), median +0.16 and +0.23. Strongest: receptions, touches, carries, chance-chain and build-up involvement (men +0.6 to +0.7), chance-chain, defensive height, build-up and progressive passing (women +0.5 to +0.9). Players move towards what their teammates do.
+- **Where there is division of labour:** corners (-0.43 men, -0.25 women), free-kick shots and passes (-0.33, -0.25 men), side (`avg_y`). The set-piece takers are the only clearly complementary traits: a team that already has a corner taker gets less of it from a newcomer.
+- **Consequence for "who complements the team best":** the data does not show that movers fill gaps; it shows they adapt to the team. I will not publish a complement score. The page shows what the rest of the squad already supplies and adapts the prediction to it. Caveat: this is observational, teams also recruit players who already fit, so assimilation and selection are mixed.

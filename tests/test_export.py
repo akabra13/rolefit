@@ -16,5 +16,5 @@ def test_payload_shapes_and_leave_one_out_demand():
     assert "archetypes" in pay and "names" in pay
     p = pay["players"][0]
     assert len(p["x"]) == len(TR) == len(p["d"]) and len(p["e"]) == pay["n_embed_dims"]
-    assert set(pay["translation"]["coef"]) == set(TR) and len(pay["translation"]["coef"]["t_player"]) == 4
+    assert set(pay["translation"]["coef"]) == set(TR) and len(pay["translation"]["coef"]["t_player"]) == 5 and len(p["o"]) == len(TR)
     assert pay["translation"]["coef"]["t_player"][0] > 0.5
