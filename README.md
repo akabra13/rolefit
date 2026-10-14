@@ -61,7 +61,7 @@ Thresholds are fixed now. Negatives are reported plainly. Approximations are sta
 
 1. Traits + V1 (`scripts/run_traits.py`, `.github/workflows/traits.yml`). *Run 2026-10-14, see Results.*
 2. Movers, system-adjusted traits, portability, re-ID (V2, V3) (`scripts/run_portability.py`, `.github/workflows/portability.yml`). It reads stage 1's tables from Drive. *Run 2026-10-14, see Results.*
-3. Team side: demand profiles and influence.
+3. Team side: slot demand profiles (`demand.py`, `scripts/run_demand.py`, `.github/workflows/demand.yml`). Hub-role and on/off influence (`influence.py`) come after, because they need event-level chains.
 4. Fit: translation model, demand gap, counterfactual (V4, V5).
 5. Export to the Library: player card, slot card, "replace X in team T" search, side-by-side. Pages state the caveats (eras differ, no age or contract data, showcase only) and carry StatsBomb attribution.
 
@@ -81,3 +81,13 @@ Thresholds are fixed now. Negatives are reported plainly. Approximations are sta
 - Caveat: the gallery includes thousands of low-minute units (270 minutes or more), which makes cross-team harder than if only established players were listed.
 
 Implication for fit (stages 3-4): roughly a third of a trait's stable variation depends on the system, so translating a player to a new team is a real modelling problem, not an identity map.
+
+## Pre-registered: V3b slot-demand persistence (written 2026-10-14, before running stage 3)
+
+Question: is a slot's demand a property of the **system**, or just of whoever fills it?
+
+- A slot is (competition-season, team, position group), outfield only, with at least 900 slot-minutes. Demand is the minutes-weighted mean of the V1-kept traits of its players, relative to the league's same-position mean (in standard deviations over all slots of the group).
+- Test pairs: the same team and position group in two different competition-seasons. Per trait, the Pearson r of relative demand across the pair. Three numbers: all pairs; pairs where the **main player (most minutes) changed**; and a baseline pairing each slot with a random other team's slot of the same group in the second season (200 permutations, mean r).
+- **Pass bar:** median over traits of r(same team, new main player) >= 0.20 AND greater than the median other-team r + 0.10. Otherwise slot demand is reported as not separable from the occupant.
+- Also reported (descriptive): each slot's share of its team's volume traits (touches, progression, creation, defending), and cards listing a slot's most unusual traits.
+- Limitation stated up front: only seasons with full minutes data pair up, which is mostly the four WSL seasons and Barcelona's La Liga seasons, so the test is low-powered and clubs with repeated seasons are not a random sample.
