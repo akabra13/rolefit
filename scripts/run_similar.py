@@ -19,7 +19,9 @@ from rolefit.similar import build_space, find_units, plays_like  # noqa: E402
 OUT = Path(os.environ.get("ROLEFIT_OUT", "out"))
 QUERIES = ["Sergio Busquets", "Lionel Messi", "Kevin De Bruyne", "Kanté", "Jamie Vardy", "Virgil van Dijk",
            "Jordi Alba", "Philipp Lahm", "Alexia Putellas", "Lauren Hemp", "Cristiano Ronaldo", "Gerard Piqu",
-           "Luka Modri", "Toni Kroos", "Neymar", "Sergio Ramos", "Dani Alves", "Luis Suárez"]
+           "Luka Modri", "Toni Kroos", "Neymar", "Sergio Ramos", "Dani Alves", "Luis Suárez",
+           "Aitana Bonmat", "Vivianne Miedema", "Keira Walsh", "Lucy Bronze", "Alex Greenwood", "Ada Hegerberg",
+           "Mapi", "Irene Paredes", "Ewa Pajor", "Lena Oberdorf"]
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")

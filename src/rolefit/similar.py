@@ -41,6 +41,25 @@ def plays_like(frame: pl.DataFrame, E: np.ndarray, unit: str, k: int = 8) -> pl.
     return pl.DataFrame(rows)
 
 
-def build_space(adj: pl.DataFrame, weights: dict, min_minutes: float = 900.0):
+def add_absolute(adj: pl.DataFrame, traits) -> pl.DataFrame:
+    """{t}__abs: the trait itself minus the mean of everyone in the same
+    competition-season (all positions), so league and era effects go but the
+    position stays. A defensive midfielder then sits near other defensive
+    midfielders instead of near centre-backs who are 'as centre-back-like'."""
+    out = adj
+    for t in traits:
+        raw = pl.col(f"{t}__lpm") + pl.col(f"{t}__pos")
+        ok = raw.is_not_null() & raw.is_finite()
+        w = pl.when(ok).then(pl.col("minutes")).otherwise(0.0)
+        mean = (w * pl.when(ok).then(raw).otherwise(0.0)).sum().over("key") / w.sum().over("key")
+        out = out.with_columns((raw - mean).alias(f"{t}__abs"))
+    return out
+
+
+def build_space(adj: pl.DataFrame, weights: dict, min_minutes: float = 900.0, absolute: bool = True):
+    w = merge_weights(weights)
     f = adj.filter(pl.col("minutes") >= min_minutes)
-    return f, embed(f, merge_weights(weights))
+    if absolute:
+        f = add_absolute(f, list(w))
+        w = {t: ("abs", wt) for t, (_, wt) in w.items()}
+    return f, embed(f, w)
