@@ -138,3 +138,16 @@ Question: is a slot's demand a property of the **system**, or just of whoever fi
 - **Descriptive check:** 72 of 136 neighbours (53%) are in the query's position group. Roles overlap in practice (a Kroos-style DM sits near CMs), but a role vector that returned the wrong group half the time would not be useful.
 - **Known limitation:** men's and women's players mix freely. Traits are position-relative within each competition, so level differences between leagues are removed by design; that makes cross-gender "plays like" lists possible but unfiltered. The Library should add filters (gender, league, season, position group).
 - **Not yet done:** Lahm has no 900+ minute unit in this lake. The list has not been compared with a baseline (position label, raw traits), so face validity is the only claim.
+
+## Pre-registered: V4b team context (written 2026-10-14, before running)
+
+Question raised by the user: does the receiving team itself matter beyond its slot, i.e. its formation, how it plays as a whole, and who is already in the squad?
+
+- **Context of the new team-season, built without the mover:**
+  - *formation mix*: share of the team's matches started in each of 9 formation families, from Starting XI events;
+  - *squad supply* `O_t`: minutes-weighted mean of every other outfield player's trait `t` at that team-season;
+  - *style*: the first 5 principal components of `O` over all team-seasons.
+- **Models**, all else identical to V4 (per-trait ridge, cross-fitted by player, same samples, restricted to those with full context): `full` (V4 model), `full_others` (+ `O_t` for the trait being predicted), `full_formstyle` (+ formation shares and style components), `full_ctx` (all of them).
+- **Pass bar:** `full_ctx` beats `full` on the median standardised error, with the 90% bootstrap-by-player CI of the improvement above 0. Run separately for men and women.
+- Descriptive: which traits gain or lose most from context.
+- A "complements the team" score will only be built if V4b passes; otherwise the page shows the squad's coverage as information, not a score.

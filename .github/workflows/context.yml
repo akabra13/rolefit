@@ -1,0 +1,67 @@
+name: Team context
+
+# V4b: does the receiving team's context improve role translation?
+
+on:
+  workflow_dispatch:
+
+jobs:
+  context:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install rolefit (and pitchgraph, its pinned dependency)
+        run: pip install -e .
+
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        env:
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [gdrive]
+          type = drive
+          scope = drive
+          token = ${GDRIVE_OAUTH_TOKEN}
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+
+      - name: Pull tables from Drive
+        run: |
+          mkdir -p "$HOME/pitchgraph"
+          rclone copy gdrive:lake/events "$HOME/pitchgraph/lake/events" --fast-list -v
+          rclone copy gdrive:lake/matches "$HOME/pitchgraph/lake/matches" --fast-list -v
+          rclone copy gdrive:rolefit/traits out --fast-list -v
+          rclone copy gdrive:rolefit/portability out --fast-list -v
+
+      - name: Formations and V4b
+        env:
+          PITCHGRAPH_DATA: /home/runner/pitchgraph
+        run: |
+          python scripts/run_context.py
+          for g in male female; do
+            echo "=== $g ==="
+            ROLEFIT_OUT=out/$g ROLEFIT_ROOT=out python scripts/run_fit_context.py
+          done
+
+      - name: Push results to Drive
+        run: rclone copy out gdrive:rolefit/context --include "**/fit_context.json" --include "team_formations.parquet" -v
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team-context
+          path: |
+            out/*/fit_context.json
+          if-no-files-found: ignore

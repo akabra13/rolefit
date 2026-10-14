@@ -74,3 +74,43 @@ def test_full_model_beats_each_single_source_baseline():
     assert per["position"][0] > 0.9
     boot = player_bootstrap(S, err, n_boot=60)
     assert boot["full_vs_position"]["ci90"][0] > 0
+
+
+def test_context_models_help_only_when_context_matters():
+    from rolefit.fit import CTX_MODELS, context_bootstrap
+    rng = np.random.default_rng(0)
+    n, T = 1500, 2
+    x_old = rng.normal(size=(n, T))
+    O_new = rng.normal(size=(n, T))
+    ctx = rng.normal(size=(n, 6))
+    player = rng.integers(0, 300, n)
+
+    def sample(y):
+        return {"x_old": x_old, "d_new": rng.normal(size=(n, T)), "d_old": rng.normal(size=(n, T)),
+                "y": y, "player": player, "O_new": O_new, "ctx": ctx}
+
+    matters = sample(0.5 * x_old + 0.8 * O_new + 0.1 * rng.normal(size=(n, T)))
+    ignores = sample(0.8 * x_old + 0.3 * rng.normal(size=(n, T)))
+    for S, expect in ((matters, True), (ignores, False)):
+        err = crossfit(S)
+        c = context_bootstrap(S, err, n_boot=80)
+        assert (c["full_ctx"]["ci90"][0] > 0) == expect or (not expect and c["full_ctx"]["improvement_over_full"] < 0.02)
+    assert set(CTX_MODELS) <= set(crossfit(matters))
+
+
+def test_add_context_builds_the_new_teams_context_without_the_mover():
+    from rolefit.context import others_demand
+    from rolefit.fit import add_context
+    rows = []
+    for team, vals in ((1, (1.0, 3.0, 5.0)), (2, (10.0, 20.0, 30.0))):
+        for i, v in enumerate(vals):
+            rows.append({"unit": f"{team}{i}|{team}|c|s", "key": "c_s", "team_id": team, "group": "CM",
+                         "minutes": 2000.0, "t__pos": v})
+    adj = pl.DataFrame(rows)
+    others = others_demand(adj, ("t",))
+    shares = pl.DataFrame({"key": ["c_s", "c_s"], "team_id": [1, 2], "f_433": [1.0, 0.0], "f_442": [0.0, 1.0]})
+    S = {"y": np.zeros((2, 1)), "x_old": np.zeros((2, 1)), "d_new": np.zeros((2, 1)), "d_old": np.zeros((2, 1)),
+         "player": np.array([10, 11]), "unit_new": np.array(["11|1|c|s", "20|2|c|s"])}
+    out = add_context(S, others, shares, ("t",), n_pca=1)
+    assert np.allclose(out["O_new"].ravel(), [(1.0 + 5.0) / 2, (20.0 + 30.0) / 2])
+    assert out["ctx"][0][0] == 1.0 and out["ctx"][1][1] == 1.0

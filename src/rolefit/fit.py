@@ -73,6 +73,42 @@ def build_samples(adj: pl.DataFrame, loo: pl.DataFrame, pairs: pl.DataFrame, tra
     return {k: v[ok] for k, v in S.items()}
 
 
+CTX_MODELS = ("full_others", "full_formstyle", "full_ctx")
+
+
+def add_context(S: dict, others: pl.DataFrame, shares: pl.DataFrame, traits, n_pca: int = 5) -> dict:
+    """Attach the NEW team's context to each sample, built without the mover:
+    O_new (n, T)   what the rest of the new team's outfield players supply
+    ctx (n, k)     formation shares of the new team-season + the first `n_pca`
+                   principal components of O_new (the team's overall style)
+    Samples with any missing context are dropped for every model."""
+    cols = [f"O_{t}" for t in traits]
+    ou = others.select(["unit"] + cols)
+    O = ou.select(cols).to_numpy().astype(float)
+    mu, sd = np.nanmean(O, 0), np.nanstd(O, 0)
+    Z = np.nan_to_num((O - mu) / np.where(sd > 0, sd, 1.0))
+    _, _, Vt = np.linalg.svd(Z - Z.mean(0), full_matrices=False)
+    P = (Z - Z.mean(0)) @ Vt[:n_pca].T
+    row = {u: i for i, u in enumerate(ou["unit"].to_list())}
+    fcols = [c for c in shares.columns if c.startswith("f_")]
+    sh = {(r["key"], r["team_id"]): [r[c] for c in fcols]
+          for r in shares.select(["key", "team_id"] + fcols).iter_rows(named=True)}
+    n = len(S["y"])
+    O_new, ctx, ok = np.full((n, len(traits)), np.nan), np.full((n, len(fcols) + n_pca), np.nan), np.zeros(n, bool)
+    for j, u in enumerate(S["unit_new"]):
+        pid, team, comp, season = u.split("|")
+        f = sh.get((f"{comp}_{season}", int(team)))
+        i = row.get(u)
+        if f is None or i is None or np.isnan(O[i]).any():
+            continue
+        O_new[j] = O[i]
+        ctx[j] = f + list(P[i])
+        ok[j] = True
+    out = {k: v[ok] for k, v in S.items()}
+    out["O_new"], out["ctx"] = O_new[ok], ctx[ok]
+    return out
+
+
 def _ridge(F: np.ndarray, y: np.ndarray, lam: float = LAMBDA):
     """Ridge with intercept; features standardised so lam is comparable."""
     if F.shape[1] == 0:
@@ -97,11 +133,19 @@ def crossfit(S: dict, n_folds: int = N_FOLDS, seed: int = 0) -> dict:
     fold_of = dict(zip(players, np.random.default_rng(seed).permutation(len(players)) % n_folds))
     fold = np.array([fold_of[p] for p in S["player"]])
     feats = [S["x_old"], S["d_new"], S["d_old"]]
-    err = {m: np.zeros((n, T)) for m in MODELS}
+    names = list(MODELS) + (list(CTX_MODELS) if "O_new" in S else [])
+    err = {m: np.zeros((n, T)) for m in names}
     for t in range(T):
         y = S["y"][:, t]
-        for m, idx in MODELS.items():
-            F = np.column_stack([feats[i][:, t] for i in idx]) if idx else np.zeros((n, 0))
+        for m in names:
+            if m in MODELS:
+                idx = MODELS[m]
+                F = np.column_stack([feats[i][:, t] for i in idx]) if idx else np.zeros((n, 0))
+            else:
+                base = [S["x_old"][:, t], S["d_new"][:, t], S["d_old"][:, t]]
+                if m in ("full_others", "full_ctx"):
+                    base.append(S["O_new"][:, t])
+                F = np.column_stack(base + ([S["ctx"]] if m in ("full_formstyle", "full_ctx") else []))
             for f in range(n_folds):
                 tr, te = fold != f, fold == f
                 if not te.any():
@@ -145,6 +189,27 @@ def player_bootstrap(S: dict, err: dict, n_boot: int = 300, seed: int = 0) -> di
         d = boots[m] - boots["full"]
         out[f"full_vs_{m}"] = {"improvement": round(out[m]["median_std_error"] - out["full"]["median_std_error"], 4),
                                "ci90": [round(float(np.percentile(d, 5)), 4), round(float(np.percentile(d, 95)), 4)]}
+    return out
+
+
+def context_bootstrap(S: dict, err: dict, n_boot: int = 300, seed: int = 0) -> dict:
+    """Improvement of each context model over `full` (positive = context helps),
+    median over traits of the standardised error, 90% CI resampling players."""
+    rng = np.random.default_rng(seed)
+    players, inv = np.unique(S["player"], return_inverse=True)
+    P = len(players)
+    boots = {m: [] for m in ("full",) + CTX_MODELS}
+    for _ in range(n_boot):
+        w = np.bincount(rng.integers(0, P, P), minlength=P).astype(float)[inv]
+        for m in boots:
+            boots[m].append(np.nanmedian(standardised_error(err[m], S["y"], w)))
+    out = {}
+    for m in CTX_MODELS:
+        d = np.array(boots["full"]) - np.array(boots[m])
+        pt = float(np.nanmedian(standardised_error(err["full"], S["y"])) - np.nanmedian(standardised_error(err[m], S["y"])))
+        out[m] = {"median_std_error": round(float(np.nanmedian(standardised_error(err[m], S["y"]))), 4),
+                  "improvement_over_full": round(pt, 4),
+                  "ci90": [round(float(np.percentile(d, 5)), 4), round(float(np.percentile(d, 95)), 4)]}
     return out
 
 
