@@ -40,7 +40,7 @@ jobs:
         run: rclone copy gdrive:rolefit/traits out --fast-list -v
 
       - name: Slot demand
-        run: python scripts/run_portability.py
+        run: python scripts/run_demand.py
 
       - name: Push results to Drive
         run: rclone copy out gdrive:rolefit/demand --include "demand.json" --include "slot_demand.parquet" -v
