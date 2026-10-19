@@ -42,3 +42,14 @@ def test_weaknesses_and_slot():
     slots = pl.DataFrame({"group": ["CB", "DM"], "rel_prog_pass_p100": [-1.5, 0.2], "rel_prog_carry_p100": [-0.5, 0.1]})
     s = slot_for_need("prog_pp", slots)
     assert s["group"] == "CB" and s["shortfall"] == -1.0
+
+
+def test_contribution_weighting_moves_the_need_to_the_productive_position():
+    from rolefit.needs import group_contribution
+    league = pl.DataFrame({"group": ["CB", "CB", "W", "W"], "share_aerials_p100": [0.30, 0.34, 0.04, 0.06],
+                           "rel_aerials_p100": [0.0, 0.0, 0.0, 0.0], "rel_header_shot_share": [0.0] * 4})
+    c = group_contribution(league, "setpiece_xg_pp")
+    assert c["CB"] > c["W"]
+    team = pl.DataFrame({"group": ["CB", "W"], "rel_aerials_p100": [-0.8, -1.5], "rel_header_shot_share": [-0.8, -1.5]})
+    assert slot_for_need("setpiece_xg_pp", team)["group"] == "W"            # unweighted: wingers look worst
+    assert slot_for_need("setpiece_xg_pp", team, c)["group"] == "CB"        # weighted: centre-backs matter

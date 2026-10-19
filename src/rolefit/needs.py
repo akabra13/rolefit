@@ -80,10 +80,24 @@ def weaknesses(row: dict, importance: dict | None, top: int = 3) -> list:
     return [r for r in out if r["z_good"] < -0.5][:top]
 
 
-def slot_for_need(metric: str, team_slots: pl.DataFrame) -> dict | None:
+def group_contribution(all_slots: pl.DataFrame, metric: str) -> dict:
+    """How much each position group typically produces of a metric's linked
+    traits: mean over the league's slots of the slot's share of the team total
+    (share_{t}), averaged over linked traits that have shares. Groups without
+    share data get the mean of the others."""
+    links = TRAIT_LINKS.get(metric, {})
+    cols = [f"share_{t}" for t, sgn in links.items() if sgn > 0 and f"share_{t}" in all_slots.columns]
+    if not cols or all_slots.is_empty():
+        return {}
+    g = all_slots.group_by("group").agg([pl.col(c).mean() for c in cols])
+    out = {r["group"]: float(np.nanmean([r[c] for c in cols if r[c] is not None])) for r in g.iter_rows(named=True)}
+    return out
+
+
+def slot_for_need(metric: str, team_slots: pl.DataFrame, contribution: dict | None = None) -> dict | None:
     """team_slots: this team-season's rows of slot_demand (group + rel_{t}).
-    Returns the group whose linked traits fall furthest below the league slot
-    average, with the per-trait gaps."""
+    Returns the group where the shortfall on the metric's linked traits, weighted
+    by how much that position usually contributes to them, is largest."""
     links = TRAIT_LINKS.get(metric)
     if not links or team_slots.is_empty():
         return None
@@ -93,7 +107,8 @@ def slot_for_need(metric: str, team_slots: pl.DataFrame) -> dict | None:
                 and np.isfinite(r[f"rel_{t}"])]
         if not vals:
             continue
-        sc = float(np.mean(vals))
+        w = (contribution or {}).get(r["group"], 1.0)
+        sc = float(np.mean(vals)) * (w if contribution else 1.0)
         if best is None or sc < best["shortfall"]:
             best = {"group": r["group"], "shortfall": round(sc, 2),
                     "traits": {t: round(float(r[f"rel_{t}"]), 2) for t in links if f"rel_{t}" in r

@@ -20,7 +20,7 @@ import polars as pl  # noqa: E402
 from pitchgraph.data.lake import Lake  # noqa: E402
 
 from rolefit.fit import _ridge  # noqa: E402
-from rolefit.needs import TRAIT_LINKS, peer_z, slot_for_need, weaknesses  # noqa: E402
+from rolefit.needs import TRAIT_LINKS, group_contribution, peer_z, slot_for_need, weaknesses  # noqa: E402
 from rolefit.team import METRICS, team_match_counts, team_season_metrics  # noqa: E402
 
 OUT = Path("out")
@@ -88,12 +88,16 @@ if __name__ == "__main__":
         kept = json.loads((d / "reliability.json").read_text(encoding="utf-8"))["kept"]
         slots = pl.read_parquet(d / "slot_demand.parquet") if (d / "slot_demand.parquet").exists() else pl.DataFrame()
         adj = pl.read_parquet(d / "traits_adjusted.parquet")
+        contrib = {m: group_contribution(slots, m) for m in TRAIT_LINKS} if slots.height else {}
+        print("  typical contribution by position: " + "; ".join(
+            f"{m}: " + ", ".join(f"{g}={v:.2f}" for g, v in sorted(c.items(), key=lambda x: -x[1])[:3])
+            for m, c in contrib.items() if c and m in ("setpiece_xg_pp", "prog_pp", "high_regain_pp")))
         teams = []
         for r in tg.filter(pl.col("matches") >= 8).iter_rows(named=True):
             weak = weaknesses(r, imp)
             ts_slots = slots.filter((pl.col("key") == r["key"]) & (pl.col("team_id") == r["team_id"])) if slots.height else slots
             for w in weak:
-                w["slot"] = slot_for_need(w["metric"], ts_slots)
+                w["slot"] = slot_for_need(w["metric"], ts_slots, contrib.get(w["metric"]))
                 w["traits"] = {t: s for t, s in TRAIT_LINKS.get(w["metric"], {}).items() if t in kept}
             team_units = adj.filter((pl.col("key") == r["key"]) & (pl.col("team_id") == r["team_id"]))
             sv = {}

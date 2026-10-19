@@ -22,8 +22,10 @@ import polars as pl
 
 ATTACK_VOLUME = ("touches_p100", "recv_p100", "prog_pass_p100", "prog_carry_p100", "box_entry_p100",
                  "shot_assist_p100", "cross_p100", "through_p100", "carry_p100", "takeon_p100",
-                 "shots_p100", "xg_p100", "value_p100")
-DEFENCE_VOLUME = ("pressures_p100o", "regains_p100o", "tackles_p100o", "fouls_p100o")
+                 "shots_p100", "xg_p100", "value_p100", "touch_box_p100", "carry_att_entry_p100",
+                 "carry_box_entry_p100", "aerials_p100")
+DEFENCE_VOLUME = ("pressures_p100o", "regains_p100o", "tackles_p100o", "fouls_p100o", "intercept_p100o",
+                  "recovery_p100o", "clearance_p100o", "block_p100o")
 SLOT_KEYS = ["key", "team_id", "group"]
 
 
