@@ -24,7 +24,10 @@ if __name__ == "__main__":
     names = {}
     for a, b in (("home_team_id", "home_team"), ("away_team_id", "away_team")):
         names.update(dict(zip(m[a].to_list(), m[b].to_list())))
-    payload = build_payload(units, adj, weights, kept, names)
+    level = pl.read_parquet(OUT / "level.parquet") if (OUT / "level.parquet").exists() else None
+    strength = (json.loads((OUT / "level.json").read_text(encoding="utf-8"))["strength"]
+                if (OUT / "level.json").exists() else None)
+    payload = build_payload(units, adj, weights, kept, names, level=level, strength=strength)
     (OUT / "library.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
                                       encoding="utf-8")
     size = (OUT / "library.json").stat().st_size / 1e6

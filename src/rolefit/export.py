@@ -86,7 +86,8 @@ def translation_coefficients(adj, loo, others, units, kept) -> dict:
 
 
 def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: list,
-                  team_names: dict, min_minutes: float = MIN_MINUTES) -> dict:
+                  team_names: dict, min_minutes: float = MIN_MINUTES, level: pl.DataFrame | None = None,
+                  strength: list | None = None) -> dict:
     loo = loo_slot_demand(adj, kept)
     others = others_demand(adj, kept)
     frame = (adj.filter(pl.col("minutes") >= min_minutes)
@@ -109,6 +110,7 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
     O = frame.select([f"O_{t}" for t in kept]).to_numpy().astype(float)
     sd = np.nanstd(X, axis=0)
     players = []
+    lv = {} if level is None else {u: (p, k) for u, p, k in level.select("unit", "level_pct", "strength_known").iter_rows()}
     for i, row in enumerate(frame.select("unit", "player_id", "player", "nickname", "team_id", "competition",
                                          "season", "gender", "group", "position", "minutes").iter_rows(named=True)):
         players.append({
@@ -117,9 +119,11 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
             "t": team_names.get(row["team_id"], str(row["team_id"])), "c": row["competition"],
             "s": row["season"], "g": row["gender"], "p": row["group"], "pos": row["position"], "a": assign[i],
             "m": int(round(row["minutes"])),
+            "lv": (lambda t: None if t is None or t[0] is None else int(t[0]))(lv.get(row["unit"])),
+            "lk": bool(lv.get(row["unit"], (None, False))[1]),
             "x": [r(v) for v in X[i]], "d": [r(v) for v in D[i]], "o": [r(v) for v in O[i]], "e": [r(v, 2) for v in E[i]],
         })
     return {
         "traits": [{"k": t, "family": TRAITS.get(t, "other"), "sd": r(s, 3)} for t, s in zip(kept, sd)],
-        "translation": tr, "players": players, "archetypes": arch_info, "names": NAMES, "n_embed_dims": int(E.shape[1]),
+        "translation": tr, "players": players, "archetypes": arch_info, "names": NAMES, "strength": strength or [], "n_embed_dims": int(E.shape[1]),
     }
