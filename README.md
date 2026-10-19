@@ -229,3 +229,14 @@ New traits pass V1 for both genders: releases within 2 seconds (r_within 0.745 w
 - As registered: men keep A, women use B. For women, removing team style clearly helps find the same player at another team; for men it does not.
 - **Face validity afterwards, reported as it came out:** Busquets is unchanged (Stambouli, Rabiot, Tiago, Coquelin; the replacement list still leads with Mendy, Gonalons, Stambouli, Casemiro). Putellas got worse in B (Bonmati drops out; Ella Toone and Nerea Eizaguirre come in). Walsh, Miedema and Bronze stay good. Giroud, Ozil, Kane (with the tier filter) stay good.
 - Reading: the event data does not contain what makes Busquets distinct from other possession-side holding midfielders. Better proxies need body orientation, scanning and the positions of nearby opponents at every touch, which full-season 360 data would give for a few clubs only.
+
+## Pre-registered: V9 team needs (written 2026-10-19, before running)
+
+Goal (the user's): pick a team, see where it falls short, and what type of player would address it.
+
+- **Team metrics** per team-season (`team.py`): chances, shots, box and final-third entries, progression, losses in own third, pass accuracy, possession share, cross share, set-piece threat; chances and box entries conceded, high regains, PPDA, counter-attack and set-piece chances conceded, aerial win share. All per possession, per opponent possession or shares.
+- **Peers:** z-scores within the team's competition-season when it has at least 8 teams with 10+ matches; otherwise against the gender pool (flagged).
+- **V9 test:** do the metrics (excluding chances created and conceded themselves) explain results? Ridge regression of points per match (within-league) on the peer z-scores, leave-one-competition-season-out. **Pass bar:** cross-validated R^2 >= 0.25 with the 90% bootstrap (over competition-seasons) lower bound above 0. Per gender.
+- **If V9 passes,** weaknesses are weighted by each metric's importance for points; otherwise all metrics count equally and the page says so.
+- **Need -> position -> player type:** each metric is linked to the player traits that produce it (a stated football judgement in `needs.py`, not learnt). The position group whose players are furthest below the league's same-position average on those traits is where the need sits. Candidates are ranked by their predicted traits in that slot (V4/V4b translation with the team's squad), with the page's tier and level filters.
+- Not claimed: that signing the suggested type fixes the weakness. Players adapt to teams (V4b), and there is no test here of signings changing team metrics.
