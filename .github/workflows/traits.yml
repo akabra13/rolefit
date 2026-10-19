@@ -46,7 +46,7 @@ jobs:
       - name: Pull lake tables from Drive
         run: |
           mkdir -p "$HOME/pitchgraph"
-          for t in events matches lineups; do
+          for t in events matches lineups frames; do
             rclone copy gdrive:lake/$t "$HOME/pitchgraph/lake/$t" --fast-list -v
           done
 

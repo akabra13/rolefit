@@ -9,11 +9,13 @@ from rolefit.traits import (EVENT_COLS, add_derived, aggregate, on_pitch_possess
 
 def _ev(**kw):
     base = {c: None for c in EVENT_COLS}
+    base.update({"idx": 0, "period_seconds": 0.0})
     base.update({"match_id": 1, "player_id": 7, "team_id": 1, "possession_team_id": 1, "period": 1,
                  "minute": 0, "second": 0, "under_pressure": False, "counterpress": False,
                  "competition_id": 1, "season_id": 1, "f_cross": False, "f_switch": False,
                  "f_through": False, "f_assist": False, "f_aerial_won": False, "f_cutback": False,
-                 "f_backheel": False, "extra_card": False, "value": None, "xp": None})
+                 "f_backheel": False, "extra_card": False, "value": None, "xp": None,
+                 "one_touch": False, "hold_s": None, "recv_space_e": None, "recv_crowd_e": None})
     base.update(kw)
     return base
 
@@ -90,3 +92,30 @@ def test_playstyle_traits_on_hand_traceable_events():
     # possessions 1, 2, 3 are touched; only possession 1 produced xG (0.3), and the player took that shot
     assert abs(t["poss_touch_share"] - 0.3) < 1e-9 and abs(t["xgchain_p100"] - 3.0) < 1e-9
     assert t["xgbuildup_p100"] == 0.0
+
+
+def test_one_touch_and_hold_time_from_the_event_stream():
+    from rolefit.traits import tempo_columns
+    rows = [
+        dict(event_id="a", idx=1, player_id=7, type="Ball Receipt*", period_seconds=10.0),
+        dict(event_id="b", idx=2, player_id=7, type="Pass", period_seconds=10.5),          # first-time
+        dict(event_id="o", idx=3, player_id=9, team_id=2, type="Pressure", period_seconds=11.0),  # opponent, ignored
+        dict(event_id="c", idx=4, player_id=8, type="Ball Receipt*", period_seconds=12.0),
+        dict(event_id="d", idx=5, player_id=8, type="Carry", period_seconds=12.1),
+        dict(event_id="e", idx=6, player_id=8, type="Pass", period_seconds=15.0),          # after a carry, held 3s
+    ]
+    ev = pl.DataFrame([_ev(possession=1, **r) for r in rows], infer_schema_length=None)
+    t = tempo_columns(ev).sort("idx")
+    oneT = dict(zip(t["event_id"].to_list(), t["one_touch"].to_list()))
+    hold = dict(zip(t["event_id"].to_list(), t["hold_s"].to_list()))
+    assert oneT["b"] and not oneT["e"]
+    assert abs(hold["b"] - 0.5) < 1e-9 and abs(hold["e"] - 3.0) < 1e-9
+
+
+def test_receipt_space_counts_nearby_opponents():
+    from rolefit.traits import receipt_space
+    ev = pl.DataFrame([_ev(event_id="r", type="Ball Receipt*", x=50.0, y=40.0)], infer_schema_length=None)
+    fr = pl.DataFrame({"event_id": ["r"] * 4, "teammate": [False, False, False, True],
+                       "x": [53.0, 50.0, 70.0, 50.5], "y": [40.0, 44.0, 40.0, 40.0]})
+    out = receipt_space(ev.drop("recv_space_e", "recv_crowd_e"), fr).row(0, named=True)
+    assert out["recv_space_e"] == 3.0 and out["recv_crowd_e"] == 2.0

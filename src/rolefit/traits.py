@@ -61,12 +61,15 @@ TRAITS = {
     "poss_touch_share": "sequence", "xgchain_p100": "sequence", "xgbuildup_p100": "sequence",
     "shot_box_share": "finishing", "header_shot_share": "finishing", "goals_p100": "finishing",
     "finishing_oe": "finishing",
+    # --- tempo and press resistance (added 2026-10-19: what separates a Busquets from a Coquelin) ---
+    "one_touch_share": "tempo", "hold_time": "tempo", "up_pass_cmp": "press", "up_retain": "press",
+    "recv_space": "press", "recv_crowd": "press",
 }
 
 EVENT_COLS = ["match_id", "match_date", "event_id", "player_id", "team_id", "possession",
               "possession_team_id", "period", "minute", "second", "type", "sub_type", "outcome",
               "x", "y", "end_x", "end_y", "under_pressure", "counterpress", "height", "body_part",
-              "xg", "play_pattern", "position", "duration", "competition_id", "season_id"]
+              "xg", "play_pattern", "position", "duration", "idx", "period_seconds", "competition_id", "season_id"]
 
 
 def _has(flag: str) -> pl.Expr:
@@ -125,6 +128,52 @@ def on_pitch_possessions(events: pl.DataFrame, sp: pl.DataFrame) -> pl.DataFrame
         (pl.col("possession_team_id") != pl.col("team_id")).sum().alias("opp_poss"))
     mins = sp.group_by("match_id", "team_id", "player_id").agg(pl.col("minutes").sum())
     return mins.join(counts, on=["match_id", "team_id", "player_id"], how="left").fill_null(0)
+
+
+IN_POSS_TYPES = ("Pass", "Carry", "Ball Receipt*", "Dribble", "Shot", "Miscontrol", "Dispossessed")
+HOLD_CAP_S = 15.0
+CROWD_RADIUS = 5.0
+
+
+def tempo_columns(ev: pl.DataFrame) -> pl.DataFrame:
+    """Per event: one_touch (a pass whose previous in-possession event was the
+    same player's ball receipt, i.e. no carry in between) and hold_s (seconds
+    from the player's last receipt in the possession to a pass or shot,
+    capped). Computed on the team's in-possession event stream in match order."""
+    s = ev.select("event_id", "match_id", "idx", "possession", "player_id", "team_id", "possession_team_id",
+                  "type", "period", "period_seconds").sort("match_id", "idx")
+    s = s.filter((pl.col("team_id") == pl.col("possession_team_id")) & pl.col("type").is_in(IN_POSS_TYPES))
+    s = s.with_columns(
+        _pt=pl.col("type").shift(1).over("match_id"), _pp=pl.col("player_id").shift(1).over("match_id"),
+        _pper=pl.col("period").shift(1).over("match_id"),
+        _rt=pl.when(pl.col("type") == "Ball Receipt*").then(pl.col("period_seconds")))
+    s = s.with_columns(_rt=pl.col("_rt").forward_fill().over("match_id", "possession", "player_id", "period"))
+    release = pl.col("type").is_in(["Pass", "Shot"])
+    s = s.select(
+        "event_id",
+        one_touch=(pl.col("type") == "Pass") & (pl.col("_pt") == "Ball Receipt*") & (pl.col("_pp") == pl.col("player_id"))
+        & (pl.col("_pper") == pl.col("period")),
+        hold_s=pl.when(release & pl.col("_rt").is_not_null())
+        .then((pl.col("period_seconds") - pl.col("_rt")).clip(0.0, HOLD_CAP_S)))
+    ev = ev.drop([c for c in ("one_touch", "hold_s") if c in ev.columns])
+    return ev.join(s, on="event_id", how="left").with_columns(pl.col("one_touch").fill_null(False))
+
+
+def receipt_space(ev: pl.DataFrame, frames: pl.DataFrame | None) -> pl.DataFrame:
+    """360 only: at each successful ball receipt with a freeze-frame, the
+    distance to the nearest visible opponent (recv_space_e) and how many
+    opponents are within CROWD_RADIUS (recv_crowd_e). Null elsewhere."""
+    if frames is None or frames.is_empty():
+        ev = ev.drop([c for c in ("recv_space_e", "recv_crowd_e") if c in ev.columns])
+        return ev.with_columns(recv_space_e=pl.lit(None, pl.Float64), recv_crowd_e=pl.lit(None, pl.Float64))
+    rec = ev.filter((pl.col("type") == "Ball Receipt*") & pl.col("outcome").is_null() & pl.col("x").is_not_null())             .select("event_id", pl.col("x").alias("rx"), pl.col("y").alias("ry"))
+    opp = frames.filter(~pl.col("teammate")).select("event_id", "x", "y")
+    j = rec.join(opp, on="event_id").with_columns(
+        d=((pl.col("x") - pl.col("rx")) ** 2 + (pl.col("y") - pl.col("ry")) ** 2).sqrt())
+    g = j.group_by("event_id").agg(pl.col("d").min().alias("recv_space_e"),
+                                   (pl.col("d") < CROWD_RADIUS).sum().cast(pl.Float64).alias("recv_crowd_e"))
+    ev = ev.drop([c for c in ("recv_space_e", "recv_crowd_e") if c in ev.columns])
+    return ev.join(g, on="event_id", how="left")
 
 
 def add_derived(ev: pl.DataFrame) -> pl.DataFrame:
@@ -241,6 +290,12 @@ def aggregate(ev: pl.DataFrame, onp: pl.DataFrame, by: list[str]) -> pl.DataFram
         s("header_shot").alias("n_header_shot"), s("goal").alias("n_goal"),
         s("corner").alias("n_corner"), s("fk_pass").alias("n_fk"), s("throw").alias("n_throw"),
         s("fk_shot").alias("n_fk_shot"), s("card").alias("n_card"),
+        (pl.col("one_touch") & pl.col("open_pass")).sum().alias("n_one_touch"),
+        pl.col("hold_s").mean().alias("hold_time"),
+        (pl.col("open_pass") & pl.col("under_pressure")).sum().alias("n_up_pass"),
+        (pl.col("ok_open") & pl.col("under_pressure")).sum().alias("n_up_pass_ok"),
+        (pl.col("loss") & pl.col("under_pressure")).sum().alias("n_up_loss"),
+        pl.col("recv_space_e").mean().alias("recv_space"), pl.col("recv_crowd_e").mean().alias("recv_crowd"),
         s("_ft").alias("n_ptouch"), (pl.col("poss_xg") * pl.col("_ft")).sum().alias("xgchain_sum"),
         (pl.col("poss_xg") * (pl.col("_ft") & ~pl.col("_own_shot"))).sum().alias("xgbuild_sum"),
         s("touch").alias("n_touch"), s("recv").alias("n_recv"), s("is_pass").alias("n_pass"),
@@ -324,6 +379,10 @@ def aggregate(ev: pl.DataFrame, onp: pl.DataFrame, by: list[str]) -> pl.DataFram
         corner_p100=per("n_corner", "own_poss"), fk_pass_p100=per("n_fk", "own_poss"),
         throwin_p100=per("n_throw", "own_poss"), fk_shot_p100=per("n_fk_shot", "own_poss"),
         cards_p100o=per("n_card", "opp_poss"),
+        one_touch_share=share("n_one_touch", "n_open"),
+        up_pass_cmp=share("n_up_pass_ok", "n_up_pass"),
+        up_retain=pl.when(pl.col("n_up") > 0).then(1.0 - (pl.col("n_up_loss") + pl.col("n_up_pass") - pl.col("n_up_pass_ok"))
+                                                 / pl.col("n_up")),
     )
     return out.select(by + ["minutes", "matches", "own_poss", "opp_poss", "n_touch"] + list(TRAITS))
 

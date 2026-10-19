@@ -22,7 +22,7 @@ from pitchgraph.data.lake import Lake  # noqa: E402
 from pitchgraph.library.build import fit_value_model  # noqa: E402
 
 from rolefit.roles import POSITION_GROUPS  # noqa: E402
-from rolefit.traits import (TRAITS, add_derived, aggregate, event_flags, on_pitch_possessions,  # noqa: E402
+from rolefit.traits import (TRAITS, add_derived, receipt_space, tempo_columns, aggregate, event_flags, on_pitch_possessions,  # noqa: E402
                             spells, split_half_reliability)
 from rolefit.xpass import crossfit_xpass, pass_features  # noqa: E402
 
@@ -75,6 +75,9 @@ if __name__ == "__main__":
         ids = matches.filter(pl.col("key") == r["key"]).select("match_id", "match_date")
         raw = event_flags(lake.events().filter(pl.col("match_id").is_in(ids["match_id"].to_list()))).collect()
         vals = model.add_action_values(raw.lazy()).select("event_id", "value").collect()
+        frames = (lake.scan("frames").filter(pl.col("match_id").is_in(ids["match_id"].to_list()))
+                  .select("event_id", "teammate", "x", "y").collect()) if lake.has("frames") else None
+        raw = receipt_space(tempo_columns(raw), frames)
         ev = add_derived(raw.join(vals, on="event_id", how="left").join(xp, on="event_id", how="left"))
 
         meta = pl.DataFrame({"competition_id": [r["competition_id"]], "season_id": [r["season_id"]]})
