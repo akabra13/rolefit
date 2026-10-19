@@ -78,6 +78,7 @@ def percentile(value: float, pool: np.ndarray) -> float:
 
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
+    Path("out/results").mkdir(parents=True, exist_ok=True)
     pm = pl.read_parquet("out/research/busquets_metrics/player_match.parquet").filter(
         pl.col("minutes").fill_null(0) >= 45)
     dm = pm.filter(pl.col("is_dm"))
@@ -162,16 +163,18 @@ if __name__ == "__main__":
         X = cnt.select(use).to_numpy().astype(float)
         mu, sd = np.nanmean(X, 0), np.nanstd(X, 0)
         Z = np.nan_to_num((X - mu) / np.where(sd > 0, sd, 1))
-        bi = [i for i, p in enumerate(cnt["player_id"].to_list()) if p == BUSQUETS]
-        best_b = max(bi, key=lambda i: cnt["n"][i])
+        cp, cn = cnt["player_id"].to_list(), cnt["n"].to_list()
+        cpl, ccomp, cseas = cnt["player"].to_list(), cnt["competition"].to_list(), cnt["season"].to_list()
+        bi = [i for i, p in enumerate(cp) if p == BUSQUETS]
+        best_b = max(bi, key=lambda i: cn[i])
         d = np.sqrt(((Z - Z[best_b]) ** 2).sum(1))
-        order = [i for i in np.argsort(d) if cnt["player_id"][i] != BUSQUETS]
+        order = [int(i) for i in np.argsort(d) if cp[int(i)] != BUSQUETS]
         seen, nn = set(), []
         for i in order:
-            if cnt["player_id"][i] in seen:
+            if cp[i] in seen:
                 continue
-            seen.add(cnt["player_id"][i])
-            nn.append({"player": cnt["player"][i], "competition": cnt["competition"][i], "season": cnt["season"][i],
+            seen.add(cp[i])
+            nn.append({"player": cpl[i], "competition": ccomp[i], "season": cseas[i],
                        "distance": round(float(d[i]), 2)})
             if len(nn) == 12:
                 break
