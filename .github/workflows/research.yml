@@ -1,0 +1,86 @@
+name: Research
+
+# Research runs: pull chosen lake tables (and optional rolefit outputs), run a
+# script under research/, push its out/ folder to gdrive:rolefit/research/<tag>.
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Script path, e.g. research/busquets/inventory.py"
+        required: true
+      tables:
+        description: "Space-separated lake tables to pull (events matches lineups frames)"
+        required: false
+        default: "events matches lineups"
+      extra:
+        description: "Space-separated gdrive:rolefit/<dir> folders to pull into out/ (e.g. traits research/wyscout)"
+        required: false
+        default: ""
+      tag:
+        description: "Results folder name on Drive"
+        required: true
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install rolefit (and pitchgraph, its pinned dependency)
+        run: pip install -e .
+
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        env:
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [gdrive]
+          type = drive
+          scope = drive
+          token = ${GDRIVE_OAUTH_TOKEN}
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+
+      - name: Pull data from Drive
+        env:
+          TABLES: ${{ inputs.tables }}
+          EXTRA: ${{ inputs.extra }}
+        run: |
+          mkdir -p "$HOME/pitchgraph/lake" out
+          for t in $TABLES; do
+            rclone copy gdrive:lake/$t "$HOME/pitchgraph/lake/$t" --fast-list -v
+          done
+          for e in $EXTRA; do
+            rclone copy gdrive:rolefit/$e out/$e --fast-list -v
+          done
+
+      - name: Run research script
+        env:
+          PITCHGRAPH_DATA: /home/runner/pitchgraph
+          SCRIPT: ${{ inputs.script }}
+        run: python "$SCRIPT"
+
+      - name: Push results to Drive
+        if: always()
+        env:
+          TAG: ${{ inputs.tag }}
+        run: rclone copy out/results gdrive:rolefit/research/$TAG --fast-list -v
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-results
+          path: out/results/*.json
+          if-no-files-found: ignore
