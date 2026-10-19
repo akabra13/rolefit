@@ -178,3 +178,13 @@ The first Library draft mixed men and women and described players with 38 aggreg
 - **Playstyle archetypes** (k-means within gender and position group, k by silhouette, labelled by the traits that set the cluster apart): **loosely separated** (silhouette 0.10-0.16). Useful as tendencies (e.g. aerial target striker vs carrying striker; ball-playing vs long-ball centre-back; through-ball winger vs carrying winger), not as sharp categories.
 - **Team context** (V4b) is above: squad supply helps both genders and is assimilation, formation and style help women only.
 - **Library page:** one private artifact with a men/women switch, filters, plays-like, replace-a-player (slot demand, squad supply, predicted changes) and compare. It does not score "complementarity". The StatsBomb logo that their open-data terms ask for is not yet on the page.
+
+## Pre-registered: V7 league strength and player level (written 2026-10-19, before running)
+
+Why: every trait is relative to the player's own competition-season, so style lists mixed elite players with dominant players from weak leagues (e.g. Indian Super League strikers next to Harry Kane).
+
+- **Quality index** per unit (outfield, >= 450 minutes, per gender): mean of z-scores, within position group pooled across all competitions, of value added per 100 possessions, chance-chain involvement, completion over expected, losses per touch (reversed) and retention under pressure.
+- **Model:** q = player effect + competition-season effect, minutes-weighted, ridge-shrunk (2 and 5 pseudo-units of 900 minutes), competition effects centred. International tournaments link players from different leagues. Competition strength = minus its effect; reported only where at least 10 of its players also appear in another competition-season, otherwise "unknown".
+- **V7 test:** players split into 5 folds; competition effects fitted without the fold. For each held-out player with units in two competition-seasons, predict q at B from q at A, with and without the league adjustment. **Pass bar:** the adjustment lowers the mean squared error, with the 90% bootstrap-by-player CI of the improvement above 0. Per gender.
+- **Level** shown on the page: q minus the competition effect, as a percentile within gender and position group. Where competition strength is unknown, the level is the raw within-pool percentile and is marked as such.
+- Caveats stated up front: the quality index is an output measure, not a full rating; it favours players on dominant teams; seasons of the same competition years apart are linked only through the same players, so ageing is mixed into era differences.
