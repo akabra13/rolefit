@@ -68,21 +68,24 @@ def translation_coefficients(adj, loo, others, units, kept) -> dict:
     """V4 translation plus the squad-supply term (V4b): features per trait are
     [x_old, D_new, D_old, O_new]; O_new is what the rest of the new team supplies."""
     pairs = mover_pairs(units, 270.0)
-    S = build_samples(adj, loo, pairs, kept, CROSS_TEAM)
+    S = build_samples(adj, loo, pairs, kept, CROSS_TEAM, require_all=False)
     o = others.select(["unit"] + [f"O_{t}" for t in kept])
     row = {u: i for i, u in enumerate(o["unit"].to_list())}
     O = o.select([f"O_{t}" for t in kept]).to_numpy().astype(float)
     idx = np.array([row.get(u, -1) for u in S["unit_new"]])
-    ok = (idx >= 0)
-    ok[ok] = ~np.isnan(O[idx[ok]]).any(1)
-    S = {k: v[ok] for k, v in S.items()}
-    O_new = O[idx[ok]]
-    out = {}
+    O_new = np.where(idx[:, None] >= 0, O[np.maximum(idx, 0)], np.nan)
+    out, used = {}, []
     for t, name in enumerate(kept):
         F = np.column_stack([S["x_old"][:, t], S["d_new"][:, t], S["d_old"][:, t], O_new[:, t]])
-        coef, b0, _, _ = _ridge(F, S["y"][:, t])
+        ok = np.isfinite(F).all(1) & np.isfinite(S["y"][:, t])
+        used.append(int(ok.sum()))
+        if ok.sum() < 30:
+            out[name] = [1.0, 0.0, 0.0, 0.0, 0.0]      # too few movers: assume the player keeps the trait
+            continue
+        coef, b0, _, _ = _ridge(F[ok], S["y"][ok, t])
         out[name] = [float(c) for c in coef] + [float(b0)]
-    return {"n_pairs": int(len(S["y"])), "n_players": int(len(np.unique(S["player"]))), "coef": out}
+    return {"n_pairs": int(np.median(used)), "n_players": int(len(np.unique(S["player"]))), "coef": out,
+            "pairs_per_trait": dict(zip(kept, used))}
 
 
 def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: list,

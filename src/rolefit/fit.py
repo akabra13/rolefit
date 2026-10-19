@@ -51,7 +51,8 @@ def loo_slot_demand(adj: pl.DataFrame, traits, min_other_minutes: float = 270.0)
     return out
 
 
-def build_samples(adj: pl.DataFrame, loo: pl.DataFrame, pairs: pl.DataFrame, traits, types) -> dict:
+def build_samples(adj: pl.DataFrame, loo: pl.DataFrame, pairs: pl.DataFrame, traits, types,
+                  require_all: bool = True) -> dict:
     """Both directions of every pair of the given types. Rows with any
     missing input are dropped, identically for all models."""
     j = adj.select(["unit", "player_id"] + [f"{t}__pos" for t in traits]).join(loo, on="unit")
@@ -69,6 +70,8 @@ def build_samples(adj: pl.DataFrame, loo: pl.DataFrame, pairs: pl.DataFrame, tra
     old, new = np.array(old), np.array(new)
     S = {"x_old": X[old], "d_new": D[new], "d_old": D[old], "y": X[new], "player": np.array(pl_),
          "unit_old": np.array(j["unit"].to_list())[old], "unit_new": np.array(j["unit"].to_list())[new]}
+    if not require_all:      # caller masks per trait
+        return S
     ok = np.all(np.isfinite(np.stack([S["x_old"], S["d_new"], S["d_old"], S["y"]])), axis=(0, 2))
     return {k: v[ok] for k, v in S.items()}
 
