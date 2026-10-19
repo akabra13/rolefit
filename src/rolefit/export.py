@@ -90,7 +90,7 @@ def translation_coefficients(adj, loo, others, units, kept) -> dict:
 
 def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: list,
                   team_names: dict, min_minutes: float = MIN_MINUTES, level: pl.DataFrame | None = None,
-                  strength: list | None = None) -> dict:
+                  strength: list | None = None, space: str | None = None) -> dict:
     loo = loo_slot_demand(adj, kept)
     others = others_demand(adj, kept)
     frame = (adj.filter(pl.col("minutes") >= min_minutes)
@@ -99,7 +99,15 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
                                    "position"), on="unit", how="left"))
     w = merge_weights(weights)
     frame = add_absolute(frame, list(w))
-    style_w = {t: ("abs", wt) for t, (_, wt) in w.items() if t not in NOT_STYLE}
+    frame = frame.with_columns([(pl.col(f"{t}__abs") - pl.col(f"{t}__team").fill_null(0.0)).alias(f"{t}__abst")
+                                for t in w])
+    # space chosen by V8 (run_space.py); A is the earlier default
+    if space and space.startswith("B"):
+        style_w = {t: ("abst", wt) for t, (_, wt) in w.items() if t not in NOT_STYLE}
+    elif space and space.startswith("C"):
+        style_w = {t: ("abst", 1.0) for t, (_, wt) in w.items() if t not in NOT_STYLE}
+    else:
+        style_w = {t: ("abs", wt) for t, (_, wt) in w.items() if t not in NOT_STYLE}
     E = embed(frame, style_w)
     arch_w = {t: v for t, v in style_w.items() if t not in NOT_ARCHETYPE}
     Ea = embed(frame, arch_w)
@@ -128,5 +136,5 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
         })
     return {
         "traits": [{"k": t, "family": TRAITS.get(t, "other"), "sd": r(s, 3)} for t, s in zip(kept, sd)],
-        "translation": tr, "players": players, "archetypes": arch_info, "names": NAMES, "strength": strength or [], "n_embed_dims": int(E.shape[1]),
+        "translation": tr, "players": players, "archetypes": arch_info, "names": NAMES, "strength": strength or [], "space": space or "A", "n_embed_dims": int(E.shape[1]),
     }

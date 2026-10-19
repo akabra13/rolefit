@@ -7,7 +7,7 @@ from tests.test_fit import TR, prep
 
 def test_payload_shapes_and_leave_one_out_demand():
     adj, loo, pairs = prep()
-    adj = adj.with_columns([pl.lit(0.0).alias(f"{t}__lpm") for t in TR])
+    adj = adj.with_columns([pl.lit(0.0).alias(f"{t}__lpm") for t in TR] + [pl.lit(0.0).alias(f"{t}__team") for t in TR])
     units = adj.select("unit", "player_id", "team_id", "key", "group", "minutes").with_columns(
         player=pl.col("player_id").cast(pl.Utf8), nickname=pl.lit(None, pl.Utf8), competition=pl.lit("La Liga"),
         season=pl.lit("2015/2016"), gender=pl.lit("male"), position=pl.lit("Center Midfield"))

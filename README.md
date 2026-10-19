@@ -203,3 +203,15 @@ Why: every trait is relative to the player's own competition-season, so style li
 4. **Level:** V7 failed (above), so level is a within-competition percentile and competition tiers are an explicit assumption. Filters for tier and level remove most of the weak-league matches (Kane's list loses Roy Krishna and gains Lukaku and Bacca; Xavi's loses an Indian Super League midfielder and gains Trashorras).
 
 **Still wrong, stated plainly:** Busquets' neighbours are still possession-side holding midfielders such as Stambouli, and the replacement list for him leads with destroyers (Gonalons, Casemiro, Obi Mikel). Busquets does stand out for keeping the ball and completing passes under pressure (+2.3 and +1.8 SD, alongside Kroos and Jorginho), but on first-time passing he is exactly average for a La Liga holding midfielder: StatsBomb logs even a small touch-and-turn as a carry, so this proxy does not see a one- and two-touch player. Volume traits shared with any possession side's holding midfielder still dominate the distance. Kante's lists are weak for a similar reason (his volume of ball-winning is not separated from position-typical defending).
+
+## Pre-registered: V8 choice of the "plays like" space (written 2026-10-19, before running)
+
+Problem: Busquets' neighbours are holding midfielders of other possession sides (Stambouli at PSG). Hypothesis: team-wide style (how much the team has the ball) inflates volume traits and pulls such players together.
+
+- **Candidates**, on outfield units with >= 900 minutes, per gender, side and footedness excluded:
+  A = current page space (trait minus competition-season mean, position kept, portability weights);
+  B = A minus the team effect from stage 2 (what all of the player's teammates do relative to their positions);
+  C = B with equal weights.
+- **Criteria:** cross-team re-identification top-5 (the same player at another team, both >= 900 minutes) and position agreement (share of the 5 nearest other players in the same position group).
+- **Rule:** use the space with the highest cross-team top-5 among those with position agreement >= 0.70. Fixed before seeing results. Busquets and Kante lists are then reported as they come out, good or bad.
+- New traits in the same run: share of passes released within 2 seconds of receiving (whether or not a short carry was logged) and share of carries under 3 units (touch-and-turn).

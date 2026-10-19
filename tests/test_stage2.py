@@ -115,3 +115,8 @@ def test_run_portability_end_to_end(tmp_path):
     assert reid["cross_team"]["n"] > 50 and reid["cross_team"]["top5"] > 3 * reid["cross_team"]["position_baseline_top5"]
     assert reid["split_half"]["top5"] > 5 * reid["split_half"]["position_baseline_top5"]
     assert (out / "traits_adjusted.parquet").exists()
+    res2 = subprocess.run([sys.executable, str(root / "scripts" / "run_space.py")], cwd=tmp_path,
+                          env=env, capture_output=True, text=True, encoding="utf-8")
+    assert res2.returncode == 0, res2.stderr[-3000:]
+    space = json.loads((out / "space.json").read_text(encoding="utf-8"))
+    assert space["chosen"] in space["results"] and len(space["results"]) == 3

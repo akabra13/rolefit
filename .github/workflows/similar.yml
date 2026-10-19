@@ -45,11 +45,12 @@ jobs:
         run: |
           for g in male female; do
             echo "=== $g ==="
+            ROLEFIT_OUT=out/$g python scripts/run_space.py
             ROLEFIT_OUT=out/$g python scripts/run_similar.py
           done
 
       - name: Push results to Drive
-        run: rclone copy out gdrive:rolefit/similar --include "**/similar.json" -v
+        run: rclone copy out gdrive:rolefit/similar --include "**/similar.json" --include "**/space.json" -v
 
       - name: Upload results
         if: always()
