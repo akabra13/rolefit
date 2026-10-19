@@ -62,7 +62,7 @@ TRAITS = {
     "shot_box_share": "finishing", "header_shot_share": "finishing", "goals_p100": "finishing",
     "finishing_oe": "finishing",
     # --- tempo and press resistance (added 2026-10-19: what separates a Busquets from a Coquelin) ---
-    "one_touch_share": "tempo", "hold_time": "tempo", "up_pass_cmp": "press", "up_retain": "press",
+    "one_touch_share": "tempo", "hold_time": "tempo", "quick_release_share": "tempo", "short_carry_share": "tempo", "up_pass_cmp": "press", "up_retain": "press",
     "recv_space": "press", "recv_crowd": "press",
 }
 
@@ -132,6 +132,8 @@ def on_pitch_possessions(events: pl.DataFrame, sp: pl.DataFrame) -> pl.DataFrame
 
 IN_POSS_TYPES = ("Pass", "Carry", "Ball Receipt*", "Dribble", "Shot", "Miscontrol", "Dispossessed")
 HOLD_CAP_S = 15.0
+QUICK_S = 2.0          # a pass within 2 s of receiving counts as a quick release, carry logged or not
+SHORT_CARRY = 3.0     # a carry under 3 units is a touch-and-turn, not a run
 CROWD_RADIUS = 5.0
 
 
@@ -292,6 +294,9 @@ def aggregate(ev: pl.DataFrame, onp: pl.DataFrame, by: list[str]) -> pl.DataFram
         s("fk_shot").alias("n_fk_shot"), s("card").alias("n_card"),
         (pl.col("one_touch") & pl.col("open_pass")).sum().alias("n_one_touch"),
         pl.col("hold_s").mean().alias("hold_time"),
+        (pl.col("open_pass") & (pl.col("hold_s") <= QUICK_S)).sum().alias("n_quick"),
+        (pl.col("open_pass") & pl.col("hold_s").is_not_null()).sum().alias("n_timed"),
+        (pl.col("is_carry") & (pl.col("carry_len") < SHORT_CARRY)).sum().alias("n_short_carry"),
         (pl.col("open_pass") & pl.col("under_pressure")).sum().alias("n_up_pass"),
         (pl.col("ok_open") & pl.col("under_pressure")).sum().alias("n_up_pass_ok"),
         (pl.col("loss") & pl.col("under_pressure")).sum().alias("n_up_loss"),
@@ -380,6 +385,8 @@ def aggregate(ev: pl.DataFrame, onp: pl.DataFrame, by: list[str]) -> pl.DataFram
         throwin_p100=per("n_throw", "own_poss"), fk_shot_p100=per("n_fk_shot", "own_poss"),
         cards_p100o=per("n_card", "opp_poss"),
         one_touch_share=share("n_one_touch", "n_open"),
+        quick_release_share=share("n_quick", "n_timed"),
+        short_carry_share=share("n_short_carry", "n_carry"),
         up_pass_cmp=share("n_up_pass_ok", "n_up_pass"),
         up_retain=pl.when(pl.col("n_up") > 0).then(1.0 - (pl.col("n_up_loss") + pl.col("n_up_pass") - pl.col("n_up_pass_ok"))
                                                  / pl.col("n_up")),

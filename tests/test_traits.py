@@ -119,3 +119,14 @@ def test_receipt_space_counts_nearby_opponents():
                        "x": [53.0, 50.0, 70.0, 50.5], "y": [40.0, 44.0, 40.0, 40.0]})
     out = receipt_space(ev.drop("recv_space_e", "recv_crowd_e"), fr).row(0, named=True)
     assert out["recv_space_e"] == 3.0 and out["recv_crowd_e"] == 2.0
+
+
+def test_quick_release_and_short_carries():
+    rows = [_ev(type="Pass", x=50.0, y=40.0, end_x=60.0, end_y=40.0, hold_s=1.0),
+            _ev(type="Pass", x=50.0, y=40.0, end_x=60.0, end_y=40.0, hold_s=4.0),
+            _ev(type="Carry", x=50.0, y=40.0, end_x=51.0, end_y=41.0),
+            _ev(type="Carry", x=50.0, y=40.0, end_x=60.0, end_y=40.0)]
+    ev = add_derived(_frame(rows)).with_columns(unit=pl.lit("u"))
+    onp = pl.DataFrame({"unit": ["u"], "match_id": [1], "own_poss": [10], "opp_poss": [10], "minutes": [90.0]})
+    t = aggregate(ev, onp, ["unit"]).row(0, named=True)
+    assert t["quick_release_share"] == 0.5 and t["short_carry_share"] == 0.5

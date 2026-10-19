@@ -34,7 +34,8 @@ NAMES = {
     "header_shot_share": "Headed shots", "goals_p100": "Goals", "finishing_oe": "Finishing over expected",
     "corner_p100": "Takes corners", "fk_pass_p100": "Takes free-kick passes", "throwin_p100": "Takes throw-ins",
     "fk_shot_p100": "Shoots free kicks", "cards_p100o": "Cards",
-    "one_touch_share": "First-time passes", "hold_time": "Time on the ball", "up_pass_cmp": "Pass completion under pressure",
+    "one_touch_share": "First-time passes", "quick_release_share": "Releases within 2 seconds",
+    "short_carry_share": "Touch-and-turn carries", "hold_time": "Time on the ball", "up_pass_cmp": "Pass completion under pressure",
     "up_retain": "Keeps the ball under pressure", "recv_space": "Space when receiving (360)",
     "recv_crowd": "Opponents close when receiving (360)",
 }
