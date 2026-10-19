@@ -36,6 +36,16 @@ TRAIT_LINKS = {
     "aerial_win_share": {"aerials_p100": 1, "header_share": 1},
     "xg_for_pp": {"xgchain_p100": 1, "shot_assist_p100": 1, "xg_p100": 1},
 }
+# positions that plausibly own each need (football judgement, stated)
+ALLOWED = {
+    "prog_pp": ("CB", "FB", "DM", "CM", "W"), "final_third_pp": ("FB", "DM", "CM", "AM", "W"),
+    "box_entries_pp": ("CM", "AM", "W", "ST", "FB"), "shots_pp": ("AM", "W", "ST"), "xg_for_pp": ("AM", "W", "ST", "CM"),
+    "own_third_loss_pp": ("CB", "FB", "DM", "CM"), "pass_cmp": ("CB", "FB", "DM", "CM"),
+    "possession_share": ("CB", "FB", "DM", "CM"), "setpiece_xg_pp": ("CB", "ST"),
+    "xg_against_pp": ("CB", "FB", "DM", "CM"), "box_entries_against_pp": ("CB", "FB", "DM"),
+    "high_regain_pp": ("ST", "W", "AM", "CM", "DM"), "counter_xg_against_pp": ("DM", "CM", "CB", "FB"),
+    "setpiece_xg_against_pp": ("CB", "DM", "ST"), "aerial_win_share": ("CB", "ST", "DM"),
+}
 LABEL = {
     "xg_for_pp": "chance quality created", "shots_pp": "shot volume", "box_entries_pp": "getting into the box",
     "final_third_pp": "reaching the final third", "prog_pp": "progressing the ball",
@@ -102,7 +112,10 @@ def slot_for_need(metric: str, team_slots: pl.DataFrame, contribution: dict | No
     if not links or team_slots.is_empty():
         return None
     best = None
+    allowed = ALLOWED.get(metric)
     for r in team_slots.iter_rows(named=True):
+        if allowed and r["group"] not in allowed:
+            continue
         vals = [s * r[f"rel_{t}"] for t, s in links.items() if f"rel_{t}" in r and r[f"rel_{t}"] is not None
                 and np.isfinite(r[f"rel_{t}"])]
         if not vals:

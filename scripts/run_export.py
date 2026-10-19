@@ -30,6 +30,11 @@ if __name__ == "__main__":
     space = (json.loads((OUT / "space.json").read_text(encoding="utf-8"))["chosen"]
              if (OUT / "space.json").exists() else None)
     payload = build_payload(units, adj, weights, kept, names, level=level, strength=strength, space=space)
+    if (OUT / "team.json").exists():
+        tj = json.loads((OUT / "team.json").read_text(encoding="utf-8"))
+        payload["teams"] = tj["teams"]
+        payload["v9"] = {"pass": tj["v9_pass"], "cv_r2": tj["v9"]["cv_r2"], "ci90": tj["v9"]["ci90"],
+                         "weighting": tj["weighting"]}
     (OUT / "library.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
                                       encoding="utf-8")
     size = (OUT / "library.json").stat().st_size / 1e6

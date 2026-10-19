@@ -42,6 +42,7 @@ jobs:
           rclone copy gdrive:rolefit/portability out --fast-list -v
           rclone copy gdrive:rolefit/level out --fast-list -v
           rclone copy gdrive:rolefit/similar out --fast-list -v
+          rclone copy gdrive:rolefit/team out --fast-list -v
 
       - name: Library payload
         env:

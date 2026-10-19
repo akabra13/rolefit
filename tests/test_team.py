@@ -39,9 +39,11 @@ def test_weaknesses_and_slot():
     w = weaknesses(worst, None, top=20)
     assert w and all(x["z_good"] < 0 for x in w)
     assert {x["metric"] for x in w}.isdisjoint({"own_third_loss_pp", "xg_against_pp"})   # low is good there
-    slots = pl.DataFrame({"group": ["CB", "DM"], "rel_prog_pass_p100": [-1.5, 0.2], "rel_prog_carry_p100": [-0.5, 0.1]})
+    assert {x["metric"] for x in w}.isdisjoint({"possession_share", "pass_cmp", "ppda", "cross_share"})  # style
+    slots = pl.DataFrame({"group": ["CB", "DM", "ST"], "rel_prog_pass_p100": [-1.5, 0.2, -3.0],
+                          "rel_prog_carry_p100": [-0.5, 0.1, -3.0]})
     s = slot_for_need("prog_pp", slots)
-    assert s["group"] == "CB" and s["shortfall"] == -1.0
+    assert s["group"] == "CB" and s["shortfall"] == -1.0      # strikers are not asked to progress from deep
 
 
 def test_contribution_weighting_moves_the_need_to_the_productive_position():

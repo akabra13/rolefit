@@ -22,9 +22,11 @@ DEF_TYPES = ("Duel", "Interception", "Foul Committed", "Ball Recovery", "Block",
 METRICS = ("xg_for_pp", "shots_pp", "box_entries_pp", "final_third_pp", "prog_pp", "own_third_loss_pp", "pass_cmp",
            "possession_share", "cross_share", "setpiece_xg_pp", "xg_against_pp", "box_entries_against_pp",
            "high_regain_pp", "ppda", "counter_xg_against_pp", "setpiece_xg_against_pp", "aerial_win_share")
-# higher is better for the team? (used to turn gaps into weaknesses)
+# higher is better for the team? (used to turn gaps into weaknesses). None = a style choice, never a
+# weakness: possession share, pass accuracy, crossing and pressing height describe how a team plays
+# (Leicester 2015/16 won the league with little of the ball).
 GOOD_HIGH = {"xg_for_pp": True, "shots_pp": True, "box_entries_pp": True, "final_third_pp": True, "prog_pp": True,
-             "own_third_loss_pp": False, "pass_cmp": True, "possession_share": True, "cross_share": None,
+             "own_third_loss_pp": False, "pass_cmp": None, "possession_share": None, "cross_share": None,
              "setpiece_xg_pp": True, "xg_against_pp": False, "box_entries_against_pp": False, "high_regain_pp": True,
              "ppda": None, "counter_xg_against_pp": False, "setpiece_xg_against_pp": False, "aerial_win_share": True}
 
