@@ -188,3 +188,9 @@ Why: every trait is relative to the player's own competition-season, so style li
 - **V7 test:** players split into 5 folds; competition effects fitted without the fold. For each held-out player with units in two competition-seasons, predict q at B from q at A, with and without the league adjustment. **Pass bar:** the adjustment lowers the mean squared error, with the 90% bootstrap-by-player CI of the improvement above 0. Per gender.
 - **Level** shown on the page: q minus the competition effect, as a percentile within gender and position group. Where competition strength is unknown, the level is the raw within-pool percentile and is marked as such.
 - Caveats stated up front: the quality index is an output measure, not a full rating; it favours players on dominant teams; seasons of the same competition years apart are linked only through the same players, so ageing is mixed into era differences.
+
+### Result: V7 (2026-10-19) — FAIL for both genders; no estimated league strength is used
+
+- Men: 2,188 held-out pairs from 165 players; league adjustment improvement +0.035 (90% CI -0.004 to +0.069). Women: 1,488 pairs from 272 players; -0.008 (-0.023 to +0.004).
+- Why it cannot work on open data: the Indian Super League (the competition that motivated this) has only 3 players also seen elsewhere, so its strength is unidentified; the 1. Bundesliga seasons have 1-2. The La Liga seasons before 2015/16 contain only Barcelona's matches, so their "strength" is really Barcelona's dominance (they come out as easy leagues). Team quality and league strength cannot be separated with this sample.
+- Consequence, as registered: the page shows **level as a percentile within the player's own competition-season and position group** (pooled when fewer than 8 players), plus a **competition tier that is an assumption, labelled as such**, so users can filter weaker leagues out. The estimated strength table stays in `level.json` for transparency only.

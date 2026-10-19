@@ -53,12 +53,17 @@ if __name__ == "__main__":
         s = "unknown" if t["strength"] is None else f"{t['strength']:+.2f}"
         print(f"  {s:>8s}  {t['competition'][:28]:28s} {t['season']:10s} linked={t['linked_players']:4d} units={t['units']}")
 
-    known = {t["key"] for t in table if t["strength"] is not None}
-    lvl = df.with_columns(
-        level=pl.col("q") - pl.col("key").replace_strict({k: (lam[k] if k in known else 0.0) for k in lam}, default=0.0),
-        strength_known=pl.col("key").is_in(list(known)))
-    lvl = lvl.with_columns(level_pct=(pl.col("level").rank("average").over("group") / pl.len().over("group") * 100).round(0))
-    lvl.select("unit", "q", "level", "level_pct", "strength_known").write_parquet(OUT / "level.parquet")
+    # V7 decides whether estimated strength is used. Without it, level is the percentile of q within the
+    # unit's own competition-season and position group (small pools fall back to the position group).
+    known = {t["key"] for t in table if t["strength"] is not None} if passed else set()
+    adj_q = pl.col("q") - pl.col("key").replace_strict({k: (lam[k] if k in known else 0.0) for k in lam}, default=0.0)
+    lvl = df.with_columns(level=adj_q, strength_known=pl.col("key").is_in(list(known)),
+                          _n=pl.len().over("key", "group"))
+    within = pl.col("level").rank("average").over("key", "group") / pl.len().over("key", "group") * 100
+    pooled = pl.col("level").rank("average").over("group") / pl.len().over("group") * 100
+    lvl = lvl.with_columns(level_pct=pl.when(pl.col("_n") >= 8).then(within).otherwise(pooled).round(0),
+                           level_scope=pl.when(pl.col("_n") >= 8).then(pl.lit("competition")).otherwise(pl.lit("pool")))
+    lvl.select("unit", "q", "level", "level_pct", "level_scope", "strength_known").write_parquet(OUT / "level.parquet")
     (OUT / "level.json").write_text(json.dumps({"v7": v7, "v7_pass": passed, "strength": table}, indent=1),
                                     encoding="utf-8")
     top = lvl.sort("level", descending=True).head(15).join(units.select("unit", "player"), on="unit")
