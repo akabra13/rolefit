@@ -215,3 +215,17 @@ Problem: Busquets' neighbours are holding midfielders of other possession sides 
 - **Criteria:** cross-team re-identification top-5 (the same player at another team, both >= 900 minutes) and position agreement (share of the 5 nearest other players in the same position group).
 - **Rule:** use the space with the highest cross-team top-5 among those with position agreement >= 0.70. Fixed before seeing results. Busquets and Kante lists are then reported as they come out, good or bad.
 - New traits in the same run: share of passes released within 2 seconds of receiving (whether or not a short carry was logged) and share of carries under 3 units (touch-and-turn).
+
+### Result: V8 (2026-10-19)
+
+New traits pass V1 for both genders: releases within 2 seconds (r_within 0.745 women / 0.77 men), touch-and-turn carries (0.67 / 0.69).
+
+| Space | Men: cross-team top-5 (90% CI), position agreement | Women: cross-team top-5 (90% CI), position agreement |
+|---|---|---|
+| A position kept (previous page) | **0.219** (0.160-0.292), 0.794 | 0.231 (0.179-0.293), 0.697 (below the 0.70 bar) |
+| B = A minus team style | 0.210 (0.152-0.282), 0.800 | **0.313** (0.254-0.379), 0.707 |
+| C = B, equal weights | 0.210 (0.152-0.282), 0.807 | 0.293 (0.235-0.358), 0.717 |
+
+- As registered: men keep A, women use B. For women, removing team style clearly helps find the same player at another team; for men it does not.
+- **Face validity afterwards, reported as it came out:** Busquets is unchanged (Stambouli, Rabiot, Tiago, Coquelin; the replacement list still leads with Mendy, Gonalons, Stambouli, Casemiro). Putellas got worse in B (Bonmati drops out; Ella Toone and Nerea Eizaguirre come in). Walsh, Miedema and Bronze stay good. Giroud, Ozil, Kane (with the tier filter) stay good.
+- Reading: the event data does not contain what makes Busquets distinct from other possession-side holding midfielders. Better proxies need body orientation, scanning and the positions of nearby opponents at every touch, which full-season 360 data would give for a few clubs only.
