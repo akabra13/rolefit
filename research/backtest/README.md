@@ -17,3 +17,19 @@ Team-season transitions where the same team has StatsBomb data in two consecutiv
 - **Secondary (descriptive):** the same with an interaction for weak areas (team's z < -0.5 at t); share of arrivals with a prior profile.
 
 Whatever comes out is reported, and the Library's wording follows it.
+
+## Result (2026-10-21) — FAIL for both genders
+
+| | Women (WSL) | Men (Barcelona only) |
+|---|---|---|
+| Team transitions / transition x area rows | 21 / 273 | 16 / 208 |
+| Arrivals / with a profile from before they arrived | 104 / 39 | 70 / 14 |
+| b (arrival strength -> change in that area), 90% CI | **+2.04** (-0.02 to +3.14) | **-3.62** (-5.45 to -2.27) |
+| Departures coefficient | +0.58 | +1.01 |
+| Start-of-season z (regression to the mean) | -0.19 | -0.47 |
+| Extra effect when the area was weak | -2.1 (-6.5 to +1.8) | -13.6 (-30.0 to +3.7) |
+
+- **Primary test fails for both.** Women: in the expected direction (a one-SD stronger intake in an area goes with about +0.15 SD in that team metric) but the interval touches zero. Men: significantly negative, but from 14 arrivals with earlier profiles at one club, which carries no general meaning (Barcelona's later big signings arrived as the team declined).
+- **No sign that signings matter more where the team was weak** (both interaction intervals include zero).
+- **Coverage is the binding limit:** most arrivals have no earlier profile in open data (39 of 104 women, 14 of 70 men).
+- **Consequence for the Library:** the candidate lists are described as players strong in the area and close to how the team uses the position, not as players who would fix the weakness. Neither the data nor this test supports the stronger claim.
