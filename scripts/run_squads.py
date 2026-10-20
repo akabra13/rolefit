@@ -37,11 +37,11 @@ LEAGUES = [
 MIN_SQUAD = 11
 
 
-def statsbomb_index(lake: Lake) -> tuple[dict, dict]:
+def statsbomb_index(root: Path) -> tuple[dict, dict]:
     """normalised name -> list of (player_id, country, gender); player_id -> display name."""
-    m = lake.matches().select("match_id", "gender")
-    lu = lake.scan("lineups").select("match_id", "player_id", "player", "nickname", "country").collect() \
-             .join(m, on="match_id", how="left")
+    m = pl.read_parquet(str(root / "matches" / "*.parquet")).select("match_id", "gender")
+    lu = pl.read_parquet(str(root / "lineups" / "*.parquet")).select(
+        "match_id", "player_id", "player", "nickname", "country").join(m, on="match_id", how="left")
     lu = lu.unique(subset=["player_id"], keep="last")
     idx: dict = {}
     names = {}
