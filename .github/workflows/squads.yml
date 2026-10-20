@@ -1,0 +1,64 @@
+name: Current squads
+
+# Current squads from Wikipedia (CC BY-SA) and Wikidata (CC0), matched to StatsBomb players.
+# Weekly, since squads change in transfer windows. Uses the official MediaWiki/Wikibase APIs.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  squads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install rolefit (and pitchgraph, its pinned dependency)
+        run: pip install -e .
+
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        env:
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [gdrive]
+          type = drive
+          scope = drive
+          token = ${GDRIVE_OAUTH_TOKEN}
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+
+      - name: Pull StatsBomb lineups and matches
+        run: |
+          mkdir -p "$HOME/pitchgraph/lake"
+          for t in lineups matches; do
+            rclone copy gdrive:lake/$t "$HOME/pitchgraph/lake/$t" --fast-list -v
+          done
+
+      - name: Build current squads
+        env:
+          PITCHGRAPH_DATA: /home/runner/pitchgraph
+        run: python scripts/run_squads.py
+
+      - name: Push to Drive
+        run: rclone copy out/current gdrive:rolefit/current -v
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: squads-report
+          path: out/current/squads_report.json
+          if-no-files-found: ignore
