@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import polars as pl  # noqa: E402
 
-from pitchgraph.data.lake import Lake  # noqa: E402
+import os  # noqa: E402
 from rolefit.squads import entity_facts, keep_clubs, norm, parse_squad, season_links, wikidata_for_titles, wikitext  # noqa: E402
 
 OUT = Path("out/current")
@@ -82,7 +82,7 @@ if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8")
     t0 = time.time()
     OUT.mkdir(parents=True, exist_ok=True)
-    idx, sb_names = statsbomb_index(Lake.open())
+    idx, sb_names = statsbomb_index(Path(os.environ["PITCHGRAPH_DATA"]) / "lake")
     rows, report = [], {}
     for league, gender, articles in LEAGUES:
         text, used = None, None
