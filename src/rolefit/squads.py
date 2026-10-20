@@ -203,7 +203,7 @@ def season_links(text: str) -> list[str]:
     heads = [(m.start(), m.group(2).strip().lower()) for m in re.finditer(r"^(=+)\s*(.*?)\s*=+\s*$", text, re.M)]
     seg = ""
     for k, (pos, title) in enumerate(heads):
-        if title.startswith(("teams", "stadium", "clubs", "personnel", "participating", "locations"))                 and "change" not in title:
+        if title.startswith(("teams", "stadium", "clubs", "personnel", "participating", "location"))                 and "change" not in title:
             nxt = heads[k + 1][0] if k + 1 < len(heads) else len(text)
             seg += text[pos:nxt]
     out = []

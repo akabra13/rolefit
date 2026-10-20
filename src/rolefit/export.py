@@ -90,10 +90,21 @@ def translation_coefficients(adj, loo, others, units, kept) -> dict:
 
 def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: list,
                   team_names: dict, min_minutes: float = MIN_MINUTES, level: pl.DataFrame | None = None,
-                  strength: list | None = None, space: str | None = None) -> dict:
+                  strength: list | None = None, space: str | None = None,
+                  current: pl.DataFrame | None = None, min_minutes_current: float = 270.0) -> dict:
     loo = loo_slot_demand(adj, kept)
     others = others_demand(adj, kept)
-    frame = (adj.filter(pl.col("minutes") >= min_minutes)
+    # current-squad players: their most recent profile, even if under min_minutes (flagged provisional)
+    latest = {}
+    if current is not None and current.height:
+        ids = set(current["statsbomb_player_id"].drop_nulls().to_list())
+        cand = (adj.filter(pl.col("player_id").is_in(list(ids)) & (pl.col("minutes") >= min_minutes_current))
+                   .join(units.select("unit", "season"), on="unit", how="left")
+                   .with_columns(_yr=pl.col("season").str.slice(0, 4).cast(pl.Int32, strict=False))
+                   .sort(["player_id", "_yr", "minutes"], descending=[False, True, True]))
+        for row_ in cand.group_by("player_id", maintain_order=True).first().iter_rows(named=True):
+            latest[row_["player_id"]] = row_["unit"]
+    frame = (adj.filter((pl.col("minutes") >= min_minutes) | pl.col("unit").is_in(list(latest.values())))
                 .join(loo, on="unit").join(others, on="unit")
                 .join(units.select("unit", "player", "nickname", "competition", "season", "gender",
                                    "position"), on="unit", how="left"))
@@ -113,7 +124,12 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
     Ea = embed(frame, arch_w)
     arch_traits = [t for t in arch_w if arch_w[t][1] > 0]
     Z = frame.select([f"{t}__abs" for t in arch_traits]).to_numpy().astype(float)
-    assign, arch_info = archetypes(Ea, frame["group"].fill_null("OTHER").to_list(), Z, arch_traits)
+    full_mask = (frame["minutes"] >= min_minutes).to_numpy()
+    groups = frame["group"].fill_null("OTHER").to_list()
+    a_sub, arch_info = archetypes(Ea[full_mask], [g for g, k in zip(groups, full_mask) if k], Z[full_mask], arch_traits)
+    assign, it = [], iter(a_sub)
+    for k in full_mask:
+        assign.append(next(it) if k else None)
     tr = translation_coefficients(adj, loo, others, units.filter(pl.col("group").fill_null("OTHER") != "GK"), kept)
 
     X = frame.select([f"{t}__pos" for t in kept]).to_numpy().astype(float)
@@ -129,12 +145,20 @@ def build_payload(units: pl.DataFrame, adj: pl.DataFrame, weights: dict, kept: l
             "n": row["player"] or row["nickname"] or str(row["player_id"]),
             "t": team_names.get(row["team_id"], str(row["team_id"])), "c": row["competition"],
             "s": row["season"], "g": row["gender"], "p": row["group"], "pos": row["position"], "a": assign[i],
-            "m": int(round(row["minutes"])),
+            "m": int(round(row["minutes"])), "pv": bool(row["minutes"] < min_minutes),
             "lv": (lambda t: None if t is None or t[0] is None else int(t[0]))(lv.get(row["unit"])),
             "lk": bool(lv.get(row["unit"], (None, False))[1]),
             "x": [r(v) for v in X[i]], "d": [r(v) for v in D[i]], "o": [r(v) for v in O[i]], "e": [r(v, 2) for v in E[i]],
         })
+    squads = []
+    if current is not None and current.height:
+        for (lg, club), g in current.group_by(["league", "club"], maintain_order=True):
+            squads.append({"league": lg, "club": club, "season": g["season_article"][0], "players": [
+                {"n": p["name"], "pos": p["pos"], "nat": p["citizenship"] or p["nat"], "dob": p["dob"],
+                 "u": latest.get(p["statsbomb_player_id"]) if p["statsbomb_player_id"] is not None else None,
+                 "mt": p["match"]} for p in g.iter_rows(named=True)]})
     return {
+        "squads": squads,
         "traits": [{"k": t, "family": TRAITS.get(t, "other"), "sd": r(s, 3)} for t, s in zip(kept, sd)],
         "translation": tr, "players": players, "archetypes": arch_info, "names": NAMES, "strength": strength or [], "space": space or "A", "n_embed_dims": int(E.shape[1]),
     }

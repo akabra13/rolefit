@@ -29,7 +29,11 @@ if __name__ == "__main__":
                 if (OUT / "level.json").exists() else None)
     space = (json.loads((OUT / "space.json").read_text(encoding="utf-8"))["chosen"]
              if (OUT / "space.json").exists() else None)
-    payload = build_payload(units, adj, weights, kept, names, level=level, strength=strength, space=space)
+    cur_f = OUT.parent / "current" / "squads.parquet"
+    gender = OUT.name
+    current = pl.read_parquet(cur_f).filter(pl.col("gender") == gender) if cur_f.exists() else None
+    payload = build_payload(units, adj, weights, kept, names, level=level, strength=strength, space=space,
+                            current=current)
     if (OUT / "team.json").exists():
         tj = json.loads((OUT / "team.json").read_text(encoding="utf-8"))
         payload["teams"] = tj["teams"]

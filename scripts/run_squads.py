@@ -31,7 +31,7 @@ LEAGUES = [
     ("NWSL", "female", ["2026 National Women's Soccer League season"]),
     ("Liga F", "female", ["2026–27 Liga F", "2025–26 Liga F"]),
     ("Frauen-Bundesliga", "female", ["2026–27 Frauen-Bundesliga", "2025–26 Frauen-Bundesliga"]),
-    ("Serie A Women", "female", ["2026–27 Serie A (women's football)", "2025–26 Serie A (women's football)"]),
+    ("Serie A Women", "female", ["2026–27 Serie A (women)", "2025–26 Serie A (women)"]),
     ("Première Ligue", "female", ["2026–27 Première Ligue", "2025–26 Première Ligue"]),
 ]
 MIN_SQUAD = 11
