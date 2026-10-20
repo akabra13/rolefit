@@ -3,6 +3,7 @@ name: Team needs
 # V9: team metrics, whether they explain results, weaknesses and the player types needed.
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:

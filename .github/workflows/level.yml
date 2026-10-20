@@ -3,6 +3,7 @@ name: Level
 # V7: league strength and player level, from stage 1's tables on Drive.
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:

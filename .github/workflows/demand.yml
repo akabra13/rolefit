@@ -3,6 +3,7 @@ name: Slot demand
 # Stage 3: slot demand profiles and V3b persistence, from stage 1's tables on Drive.
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:

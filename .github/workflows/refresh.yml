@@ -1,0 +1,110 @@
+name: Refresh
+
+# Weekly, after pitchgraph's scheduled ingest: if the lake changed since the last refresh, rerun the
+# RoleFit pipeline in dependency order. The Library page itself is republished by hand from the
+# new library.json (artifact publishing is not available to Actions).
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Rerun even if the lake has not changed"
+        type: boolean
+        default: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.c.outputs.changed }}
+      stamp: ${{ steps.c.outputs.stamp }}
+    steps:
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+      - name: Configure rclone
+        env:
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [gdrive]
+          type = drive
+          scope = drive
+          token = ${GDRIVE_OAUTH_TOKEN}
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+      - name: Has the lake changed?
+        id: c
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          STAMP=$(rclone lsjson gdrive:lake/manifest.json | python3 -c "import json,sys; print(json.load(sys.stdin)[0]['ModTime'])")
+          OLD=$(rclone cat gdrive:rolefit/refresh_state.txt 2>/dev/null || echo none)
+          echo "manifest: $STAMP   last refresh: $OLD"
+          if [ "$STAMP" != "$OLD" ] || [ "$FORCE" = "true" ]; then echo "changed=true" >> "$GITHUB_OUTPUT"; else echo "changed=false" >> "$GITHUB_OUTPUT"; fi
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+
+  traits:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    uses: ./.github/workflows/traits.yml
+    secrets: inherit
+
+  portability:
+    needs: traits
+    uses: ./.github/workflows/portability.yml
+    secrets: inherit
+
+  level:
+    needs: traits
+    uses: ./.github/workflows/level.yml
+    secrets: inherit
+
+  demand:
+    needs: traits
+    uses: ./.github/workflows/demand.yml
+    secrets: inherit
+
+  similar:
+    needs: portability
+    uses: ./.github/workflows/similar.yml
+    secrets: inherit
+
+  team:
+    needs: [demand, portability]
+    uses: ./.github/workflows/team.yml
+    secrets: inherit
+
+  export:
+    needs: [similar, level, team]
+    uses: ./.github/workflows/export.yml
+    secrets: inherit
+
+  record:
+    needs: [check, export]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+      - name: Configure rclone
+        env:
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          cat > ~/.config/rclone/rclone.conf <<EOF
+          [gdrive]
+          type = drive
+          scope = drive
+          token = ${GDRIVE_OAUTH_TOKEN}
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          EOF
+      - name: Record this refresh
+        env:
+          STAMP: ${{ needs.check.outputs.stamp }}
+        run: |
+          echo -n "$STAMP" > refresh_state.txt
+          rclone copyto refresh_state.txt gdrive:rolefit/refresh_state.txt -v

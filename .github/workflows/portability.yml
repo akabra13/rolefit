@@ -4,6 +4,7 @@ name: Portability and re-ID
 # from stage 1's tables on Drive. Results go back to gdrive:rolefit/portability.
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:

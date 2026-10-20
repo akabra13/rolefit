@@ -3,6 +3,7 @@ name: Plays-like lists
 # V6: 'plays like' lists for face validity, from stage 1 and 2 tables on Drive.
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 jobs:
